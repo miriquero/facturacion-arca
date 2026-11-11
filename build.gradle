@@ -1,0 +1,59 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.5'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group = 'ar.edu.utn.frm'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    runtimeOnly 'com.h2database:h2'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    implementation 'com.github.librepdf:openpdf:2.0.3'
+    implementation 'org.apache.poi:poi-ooxml:5.3.0'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// javac no genera package-info.class para descriptores que solo tienen Javadoc;
+// -Xpkginfo:always los emite para que cada paquete exista en el classpath.
+tasks.named('compileJava') {
+    options.compilerArgs << '-Xpkginfo:always'
+}
+
+// Zona horaria fija (DD-12): el driver JDBC de PostgreSQL envia la zona por defecto de la JVM al conectar.
+def zonaHoraria = 'America/Argentina/Buenos_Aires'
+
+tasks.named('test') {
+    useJUnitPlatform()
+    systemProperty 'user.timezone', zonaHoraria
+}
+
+tasks.named('bootRun') {
+    jvmArgs "-Duser.timezone=${zonaHoraria}"
+}
+
+// Evita generar facturacion-arca-1.0.0-plain.jar: build/libs/ solo contiene el JAR ejecutable.
+tasks.named('jar') {
+    enabled = false
+}
