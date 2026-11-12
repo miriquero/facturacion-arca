@@ -56,7 +56,7 @@
 
 | Prioridad | Pregunta | Bloquea | Decisor |
 |-----------|----------|---------|---------|
-| Alta | ¿Ya existe el remoto de GitHub del repo personal y cuál es su URL/nombre? ¿Se crea antes de la etapa 1? | Etapa 0/1 (tags, PR) | Martín |
+| ~~Alta~~ Resuelta 2026-11-12 | Remoto creado: `https://github.com/miriquero/facturacion-arca` (público), antes de la etapa 1. | Etapa 0/1 (tags, PR) | Martín |
 | Alta | PR con un solo desarrollador: ¿se abre un PR por etapa desde una rama `etapa-N` hacia `main` y se mergea a uno mismo antes de taguear? ¿Squash o merge? | Etapa 1 | Martín / docente |
 | Alta | ¿Cómo se declara el uso de IA en cada `docs/etapa-N.md` (qué se pidió, qué se revisó, qué se corrigió)? ¿Se acepta usar OpenSpec + agentes y cómo se documenta ese flujo? | Etapa 1 (primer informe) | Martín / docente |
 | Alta | Código HTTP para `estado` inválido en PATCH (IN-01) y para glifo no soportado (IN-03) | Etapa 3/4 | Docente |

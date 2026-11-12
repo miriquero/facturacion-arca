@@ -120,7 +120,7 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
 ## FASE 2 — Dominio y persistencia (Semanas 2-5, 40 % del 70 %)
 
 ### [C-02] `etapa-1-persistencia-jpa`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` archivado 2026-11-12 (105 pruebas en verde con JDK 17; PostgreSQL 16 pendiente antes de C-05)
 - **Scope**:
   - Superclases mapeadas: `EntityId` (id IDENTITY) y `AuditoriaApp` (fechas `LocalDateTime`, usuarios `ManyToOne LAZY`, alta/usuario de carga `updatable=false`) (US-101).
   - 14 entidades: `Usuario, FacturaVenta (tabla factura_venta), FacturaVentaDetalle, Cliente, Contacto, Domicilio, PuntoVenta, CondicionIva, TipoMoneda, Articulo, ListaPrecio, ListaPrecioArticulo, Marca, Rubro`; enum `EstadoFactura` con `EnumType.STRING`; unicidades (usuario, número de punto de venta, lista/artículo, punto de venta/número de factura); `numero` nulo en borrador (US-102).
