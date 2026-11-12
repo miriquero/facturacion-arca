@@ -112,7 +112,7 @@ Fecha: 2026-11-11. JDK 17.0.20.1 (Microsoft), Gradle 8.10.2, Node v24.22.1, npm 
 | Consola H2: conexion, `SHOW TABLES;`, tabla creada y ausente tras reiniciar `bootRun` | H2 en memoria | OK |
 | Perfil `postgres`: propiedades del datasource (prueba automatica, sin conectar) | ninguno (solo configuracion) | OK |
 | `docker compose config` | n/a | valido |
-| Arranque real contra PostgreSQL 16 y persistencia tras reinicio | PostgreSQL | **NO VERIFICADO**: Docker Desktop no estaba en ejecucion al cerrar la etapa; queda pendiente (tarea 4.7) |
+| Arranque real contra PostgreSQL 16 y persistencia tras reinicio | PostgreSQL | **NO VERIFICADO**: Docker Desktop no arranca en este equipo (servicio WSL deshabilitado) y el puerto 5432 está ocupado por un PostgreSQL 18 local. Se verificará con PostgreSQL 16 en el puerto 5433 antes de la etapa 4 |
 | Frontend: `npm ci && npm test && npm run build`, `npm run dev` en 5173 sin errores en consola | n/a | OK (7 pruebas) |
 
 Versiones de herramientas no fijadas por la consigna: `io.spring.dependency-management` 1.1.6, `http-server` ^14.1.1, `jsdom` ^25.0.0; `package-lock.json` congela las exactas.
