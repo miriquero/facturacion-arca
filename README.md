@@ -58,6 +58,15 @@ Con el backend en marcha: <http://localhost:8080/h2-console>
 
 > H2 es **en memoria**: al detener el backend se pierden todos los datos.
 
+## Etapa 1: persistencia y datos de ejemplo
+
+Informe de la etapa: [docs/etapa-1.md](docs/etapa-1.md).
+
+- Al arrancar (`bootRun` o `java -jar`) un `DataLoader` provisorio carga 3 usuarios (`sistema`, `acortez`, `mriquero`), catálogos, 2 clientes y 6 facturas (3 EMITIDA, 1 ANULADA, 2 BORRADOR) en la H2 en memoria. Si la base ya tiene usuarios no agrega nada.
+- Para verlos: con el backend en marcha, abrir la consola H2 (sección anterior) y ejecutar, por ejemplo, `select estado, count(*) from factura_venta group by estado` (devuelve 3 EMITIDA, 1 ANULADA, 2 BORRADOR) y `select usuario from usuario` (3 filas).
+- Las pruebas de persistencia usan `@DataJpaTest` sobre H2 embebida (cada contexto con su propia base). Las tres pruebas `@SpringBootTest` de la etapa 0 usan el perfil `test`, que **excluye** el `DataLoader` para que no escriba en la H2 compartida.
+- Las pruebas se corren con el comando de siempre: `./gradlew test`. PostgreSQL no se usó en esta etapa (ver `docs/etapa-1.md`).
+
 ## Perfil PostgreSQL
 
 1. Levantar el contenedor (PostgreSQL 16, base/usuario/contrasena `facturacion`, puerto 5432, volumen `pgdata`):
@@ -107,7 +116,7 @@ Fecha: 2026-11-11. JDK 17.0.20.1 (Microsoft), Gradle 8.10.2, Node v24.22.1, npm 
 
 | Verificacion | Motor | Resultado |
 |--------------|-------|-----------|
-| `gradlew clean test bootJar` (19 pruebas de backend) | H2 en memoria | OK |
+| `gradlew clean test bootJar` (105 pruebas de backend: 19 de la etapa 0 + 86 de la etapa 1) | H2 en memoria | OK |
 | `java -jar` arranca en 8080 | H2 en memoria | OK |
 | Consola H2: conexion, `SHOW TABLES;`, tabla creada y ausente tras reiniciar `bootRun` | H2 en memoria | OK |
 | Perfil `postgres`: propiedades del datasource (prueba automatica, sin conectar) | ninguno (solo configuracion) | OK |

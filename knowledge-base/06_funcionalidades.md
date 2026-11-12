@@ -53,7 +53,7 @@ Convención TDD (Martín): cada criterio de aceptación se convierte primero en 
 - [ ] Solo los necesarios; ninguno para detalles/contacto/domicilio.
 
 ### US-105 — DataLoader de ejemplo
-- [ ] `CommandLineRunner` transaccional, excluido de `test`, omite si hay usuarios; usuarios `sistema` y `acortez`, catálogos y seis facturas; limpia el contexto de auditoría. Versión integrada vía `FacturaService` (se completa al llegar a etapa 4).
+- [ ] `CommandLineRunner` transaccional, excluido de `test`, omite si hay usuarios; usuarios `sistema`, `acortez` y `mriquero`, catálogos y seis facturas; limpia el contexto de auditoría. Versión integrada vía `FacturaService` (se completa al llegar a etapa 4).
 **Reglas**: RN-PE-14, RN-AU-08.
 
 ### US-106 — Pruebas de persistencia

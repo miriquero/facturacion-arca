@@ -45,7 +45,7 @@ Prohibido: ANULADA/EMITIDA -> BORRADOR; BORRADOR -> ANULADA; editar/borrar fuera
 
 ## E1 — Flujo 1.2: Carga inicial (`DataLoader`)
 1. Arranque (perfil distinto de `test`) → si hay usuarios, no hace nada.
-2. Si no: crea `sistema`, `acortez`, catálogos y clientes; fija `UsuarioActual`; crea 6 facturas (versión final: vía `FacturaService`, y cambia estados con él); limpia el contexto en `finally`.
+2. Si no: crea `sistema`, `acortez`, `mriquero`, catálogos y clientes; fija `UsuarioActual`; crea 6 facturas (versión final: vía `FacturaService`, y cambia estados con él); limpia el contexto en `finally`.
 
 ---
 

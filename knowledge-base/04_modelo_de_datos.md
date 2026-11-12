@@ -65,7 +65,7 @@ Comportamiento *(ref)*: `@PrePersist` completa alta/carga/modificación con el u
 ## Entidades
 
 ### Usuario (extends EntityId)
-- `usuario` String, **único**, length 50, not null (clave de auditoría: `sistema`, `acortez`).
+- `usuario` String, **único**, length 50, not null (clave de auditoría: `sistema`, `acortez`, `mriquero`).
 - `clave` String not null *(no se usa para login; excluir de `toString`)*.
 - `nombre` String length 100 not null; `apellido` String length 100 not null.
 - Unicidad de usuario: exigida por consigna.
@@ -172,7 +172,7 @@ No hay índices adicionales exigidos. Los únicos implícitos son PK, FK y las u
 ## Seed data inicial (`DataLoader`)
 
 `CommandLineRunner` **transaccional**, **excluido del perfil `test`**, que **omite toda la carga si ya existe al menos un usuario** (no repara datos parciales). Contenido:
-- Usuarios `sistema` y `acortez`.
+- Usuarios `sistema` y `acortez` (consigna) y `mriquero` (el estudiante, agregado 2026-11-12).
 - Catálogos: condiciones de IVA, monedas (`PES`, `DOL`), puntos de venta, rubros, marcas, artículos, lista(s) de precios y su relación lista-artículo, clientes con contacto y domicilio.
 - **Seis facturas de ejemplo**: 3 EMITIDA, 1 ANULADA, 2 BORRADOR *(distribución según la referencia; la consigna solo dice "seis facturas representativas")*.
 - Prepara el contexto de auditoría (`UsuarioActual`) y lo **limpia al finalizar**.

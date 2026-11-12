@@ -19,7 +19,7 @@ Dominios: PE persistencia · IM importes · ES estados · NU numeración · CA C
 - **RN-PE-11** (E1): `FacturaVenta`: cliente opcional; punto de venta, condición IVA y moneda obligatorios. `FacturaVentaDetalle`: factura y `ListaPrecioArticulo` obligatorios. `Articulo`: marca y rubro opcionales.
 - **RN-PE-12** (E1): Longitudes del modelo respetadas: `observaciones` 500, `descripcion` de detalle 255, `cae` 14, etc. (ver 04).
 - **RN-PE-13** (E1): Una colección `detalles` puede estar vacía **mientras se construye el objeto en memoria**; un request válido de creación/edición exige al menos un renglón.
-- **RN-PE-14** (E1): `DataLoader` es `CommandLineRunner` transaccional, excluido del perfil `test`, omite la carga si ya hay usuarios; incluye usuarios `sistema` y `acortez`, catálogos y seis facturas; limpia el contexto de auditoría al terminar. En la versión integrada usa `FacturaService` para crear facturas y cambiar estados.
+- **RN-PE-14** (E1): `DataLoader` es `CommandLineRunner` transaccional, excluido del perfil `test`, omite la carga si ya hay usuarios; incluye usuarios `sistema` y `acortez` (más `mriquero`, el estudiante), catálogos y seis facturas; limpia el contexto de auditoría al terminar. En la versión integrada usa `FacturaService` para crear facturas y cambiar estados.
 
 ## Dominio: Cálculo de importes y redondeo (RN-IM)
 
