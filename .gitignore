@@ -1,0 +1,16 @@
+build/
+.gradle/
+frontend/node_modules/
+frontend/dist/
+.idea/
+*.iml
+.vscode/
+out/
+bin/
+tmp/
+*.log
+.DS_Store
+Thumbs.db
+
+# Registro de skills del orquestador (local, no se versiona)
+.atl/

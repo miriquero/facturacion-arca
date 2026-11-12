@@ -95,11 +95,11 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
 ## FASE 1 — Fundaciones (Semana 1, sin nota)
 
 ### [C-01] `etapa-0-puesta-en-marcha`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` archivado 2026-11-11 (`openspec/changes/archive/2026-11-11-etapa-0-puesta-en-marcha`); verificación PostgreSQL 16 pospuesta a antes de C-05
 - **Scope**:
   - Proyecto Gradle (wrapper 8.10.2 versionado), `facturacion-arca`, grupo `ar.edu.utn.frm`, paquete base `ar.edu.utn.frm.facturacion`; Spring Boot 3.3.5, Java 17 (toolchain), starters Web, Data JPA, Validation, Lombok, H2, PostgreSQL, test; OpenPDF 2.0.3 y Apache POI 5.3.0 declarados (US-001).
   - Paquetes vacíos: `model, dto, repository, service, controller, exception, config, report`.
-  - `application.yml`: H2 `jdbc:h2:mem:facturacion;DB_CLOSE_DELAY=-1`, usuario `sa`, consola `/h2-console`, `ddl-auto: update`, `show-sql`/`format_sql`, `open-in-view: false`, TZ Argentina; perfil `postgres` (`application-postgres.yml`) y `docker-compose.yml` PostgreSQL 16 (db/user/pass `facturacion`, 5432) (US-003).
+  - `application.yml`: H2 `jdbc:h2:mem:facturacion;DB_CLOSE_DELAY=-1`, usuario `sa`, consola `/h2-console`, `ddl-auto: update`, `show-sql`/`format_sql`, `open-in-view: false`, TZ Argentina; perfil `postgres` como segundo documento YAML dentro de `application.yml` (D3 del diseño) y `docker-compose.yml` PostgreSQL 16 (db/user/pass `facturacion`, 5432) (US-003).
   - Test de humo `contextLoads` (RED: contexto no arranca sin config) y verificación de `./gradlew test bootJar` generando `build/libs/facturacion-arca-1.0.0.jar`.
   - Esqueleto frontend TypeScript 5.6 sin framework: `package.json` con scripts `npm ci`, `build`, `dev`, `test`; `tsconfig` estricto ES2020; `index.html` con `<meta name="api-base-url">`; servido por HTTP en 5173; runner de pruebas (jsdom) con un test de humo (US-002).
   - `.gitignore` (`build/`, `.gradle/`, `node_modules/`, `dist/`, IDE); `README.md` con comandos reproducibles de arranque, pruebas y compilación, y declaración del motor probado (H2/PostgreSQL).
@@ -126,7 +126,7 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
   - 14 entidades: `Usuario, FacturaVenta (tabla factura_venta), FacturaVentaDetalle, Cliente, Contacto, Domicilio, PuntoVenta, CondicionIva, TipoMoneda, Articulo, ListaPrecio, ListaPrecioArticulo, Marca, Rubro`; enum `EstadoFactura` con `EnumType.STRING`; unicidades (usuario, número de punto de venta, lista/artículo, punto de venta/número de factura); `numero` nulo en borrador (US-102).
   - Agregado Factura-Detalles: `agregarDetalle` mantiene ambos extremos, colección inicializada, reemplazo vía `clear()`, FK en el detalle (`mappedBy="factura"`), sin cascada a catálogos; Cliente con Contacto/Domicilio (cascade + orphanRemoval) (US-103).
   - Repositorios solo los necesarios (ninguno para detalles/contacto/domicilio) (US-104).
-  - `DataLoader` provisional (`CommandLineRunner` transaccional, excluido del perfil `test`, omite si hay usuarios): usuarios `sistema` y `acortez`, catálogos y seis facturas; limpia contexto de auditoría (US-105; la versión integrada con `FacturaService` queda para C-05, DD-11).
+  - `DataLoader` provisional (`CommandLineRunner` transaccional, excluido del perfil `test`, omite si hay usuarios): usuarios `sistema`, `acortez` y `mriquero`, catálogos y seis facturas; limpia contexto de auditoría (US-105; la versión integrada con `FacturaService` queda para C-05, DD-11).
   - Tests de persistencia: guardar factura con 2 detalles + `flush/clear` + releer; relación inversa; cliente opcional; catálogos conservados; eliminación de huérfanos; violaciones reales de unicidad y nulabilidad (US-106).
   - Informe `docs/etapa-1.md`: ejemplo de SQL generado, explicación de relaciones, por qué la factura es raíz de agregado, qué datos permanecen al eliminar un borrador.
   - Tests esperados: persistencia (H2); restricciones; orphanRemoval; declaración de motor.
