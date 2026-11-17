@@ -31,7 +31,7 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
+@ToString(callSuper = true)
 public class FacturaVenta extends AuditoriaApp {
 
     /** Nulo mientras es BORRADOR. */

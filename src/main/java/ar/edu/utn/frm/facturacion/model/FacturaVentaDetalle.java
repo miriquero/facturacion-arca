@@ -17,7 +17,7 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
+@ToString(callSuper = true)
 public class FacturaVentaDetalle extends EntityId {
 
     @ToString.Exclude

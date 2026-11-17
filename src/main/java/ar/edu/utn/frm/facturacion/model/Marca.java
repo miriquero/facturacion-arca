@@ -13,7 +13,7 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
+@ToString(callSuper = true)
 public class Marca extends AuditoriaApp {
 
     @Column(nullable = false)

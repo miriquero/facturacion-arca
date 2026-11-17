@@ -22,7 +22,7 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
+@ToString(callSuper = true)
 public class Cliente extends AuditoriaApp {
 
     @Column(name = "cuit_cuil", nullable = false, length = 13)

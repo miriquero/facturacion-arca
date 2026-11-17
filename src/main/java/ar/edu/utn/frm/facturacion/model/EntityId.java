@@ -7,9 +7,11 @@ import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 /** Superclase de todas las entidades: identificador generado por la base (IDENTITY). No genera tabla propia. */
 @Getter
+@ToString
 @Setter
 @NoArgsConstructor
 @MappedSuperclass

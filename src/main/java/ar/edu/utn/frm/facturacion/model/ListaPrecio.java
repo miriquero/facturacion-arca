@@ -13,7 +13,7 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
+@ToString(callSuper = true)
 public class ListaPrecio extends AuditoriaApp {
 
     @Column(nullable = false, length = 20)

@@ -19,7 +19,7 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
+@ToString(callSuper = true)
 public class ListaPrecioArticulo extends AuditoriaApp {
 
     @ToString.Exclude
