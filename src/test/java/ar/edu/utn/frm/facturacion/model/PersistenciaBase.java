@@ -12,7 +12,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
  * persistidos y {@link UsuarioActual} fijado en {@code sistema} (y limpiado al terminar cada prueba).
  */
 @DataJpaTest
-abstract class PersistenciaBase {
+public abstract class PersistenciaBase {
 
     @Autowired
     protected TestEntityManager em;

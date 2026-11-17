@@ -13,7 +13,7 @@ import static ar.edu.utn.frm.facturacion.model.DatosDePrueba.tipoMoneda;
 import org.junit.jupiter.api.BeforeEach;
 
 /** Catálogos y cliente persistidos que toda factura de prueba necesita. */
-abstract class FacturaBase extends PersistenciaBase {
+public abstract class FacturaBase extends PersistenciaBase {
 
     protected PuntoVenta pv1;
     protected PuntoVenta pv2;
