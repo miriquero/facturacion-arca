@@ -77,6 +77,21 @@ Informe de la etapa: [docs/etapa-2.md](docs/etapa-2.md).
 - **Nota sobre Excel**: `autoSizeColumn` mide el texto con las fuentes del sistema (AWT); en Windows funciona, en un servidor sin fuentes los anchos podrían calcularse raros.
 - **Pruebas**: se corren con `./gradlew test` (179 pruebas en total tras esta etapa), sobre H2 en memoria. PostgreSQL sigue sin probarse (antes de la etapa 4).
 
+## Etapa 3: API REST de lectura
+
+Solo `GET`; no hay escritura (etapa 4), login ni paginación. Los errores salen como `application/problem+json` (`status`, `title`, `detail`, `timestamp`). Detalle de decisiones y verificaciones: [docs/etapa-3.md](docs/etapa-3.md).
+
+| Endpoint | Qué hace |
+|----------|----------|
+| `GET /api/facturas` | Listado (10 campos del reporte, de la más nueva a la más vieja). Filtros opcionales: `fechaDesde`, `fechaHasta` (`yyyy-MM-dd`, inclusivas), `estado` (`BORRADOR`, `EMITIDA`, `ANULADA`; sin distinguir mayúsculas ni espacios; vacío = sin filtro), `montoMinimo` (inclusivo, puede ser negativo; `NaN` e infinitos dan 400). Sin resultados: `200 []`. |
+| `GET /api/facturas/{id}` | Cabecera y renglones de una factura. Id inexistente: 404. |
+| `GET /api/facturas/reporte?formato=` | Descarga con los mismos filtros que el listado. `pdf` (por defecto), `xlsx` (alias `excel`), `txt` (alias `tsv`) → `facturas.pdf`, `facturas.xlsx`, `facturas.txt`. Otro formato: 400. PDF imposible por un carácter sin glifo: 400. |
+| `GET /api/catalogos/{puntos-venta, clientes, condiciones-iva, tipos-moneda, lista-precio-articulos}` | Opciones `{id, etiqueta, valor, codigoMoneda}` ordenadas por id. |
+
+Cómo probarla: arrancar con `./gradlew bootRun` (JDK 17) y ejecutar los ejemplos de [requests.http](requests.http) con la extensión REST Client de VS Code o con el cliente HTTP de IntelliJ; también sirve `curl -i "http://localhost:8080/api/facturas?estado=%20emitida%20"`.
+
+CORS: se admiten `http://localhost:5173`, `http://localhost:3000`, `http://127.0.0.1:5173` y `http://127.0.0.1:3000` (solo `GET`, y se expone `Content-Disposition`). Para cambiarlos, la propiedad `facturacion.cors.allowed-origins` en `application.yml` o, por ejemplo, `--facturacion.cors.allowed-origins=http://localhost:4200` al arrancar. CORS lo aplica el navegador: **no autentica** (`curl` lo ignora).
+
 ## Perfil PostgreSQL
 
 1. Levantar el contenedor (PostgreSQL 16, base/usuario/contrasena `facturacion`, puerto 5432, volumen `pgdata`):

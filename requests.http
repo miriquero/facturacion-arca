@@ -1,0 +1,120 @@
+### Ejemplos de la API REST de lectura (etapa 3).
+### Formato de VS Code REST Client / IntelliJ HTTP Client. Arrancar antes la aplicación:
+###   JAVA_HOME=<JDK 17> ./gradlew bootRun
+### El DataLoader carga 6 facturas con fechas relativas a hoy, por eso los ejemplos de fechas usan rangos amplios.
+
+@base = http://localhost:8080
+
+### ---------------------------------------------------------------- Listado
+
+### Sin filtros: 200 con las 6 facturas del DataLoader, de la más nueva a la más vieja
+GET {{base}}/api/facturas
+
+### Solo fechaDesde (inclusiva): 200 con todas las facturas desde esa fecha
+GET {{base}}/api/facturas?fechaDesde=2020-01-01
+
+### Solo fechaHasta (inclusiva): 200 con todas las facturas hasta esa fecha
+GET {{base}}/api/facturas?fechaHasta=2099-12-31
+
+### Solo estado: 200 con las EMITIDA
+GET {{base}}/api/facturas?estado=EMITIDA
+
+### Solo montoMinimo (inclusivo): 200 con las facturas cuyo total es mayor o igual
+GET {{base}}/api/facturas?montoMinimo=1000
+
+### Combinado: 200 con las que cumplen todos los filtros
+GET {{base}}/api/facturas?estado=EMITIDA&fechaDesde=2020-01-01&fechaHasta=2099-12-31&montoMinimo=1000
+
+### Estado con espacios y en minúsculas (%20emitida%20): se normaliza, 200 con las EMITIDA
+GET {{base}}/api/facturas?estado=%20emitida%20
+
+### Estado vacío: se trata como ausente, 200 con todas
+GET {{base}}/api/facturas?estado=
+
+### Sin resultados: 200 con []  (una consulta vacía no es un 404)
+GET {{base}}/api/facturas?montoMinimo=999999999
+
+### Mínimo negativo: válido, 200 con todas
+GET {{base}}/api/facturas?montoMinimo=-50
+
+### Fechas invertidas: 400 problem+json que nombra fechaDesde y fechaHasta
+GET {{base}}/api/facturas?fechaDesde=2026-11-10&fechaHasta=2026-11-01
+
+### Estado desconocido: 400 problem+json con el valor recibido y los admitidos
+GET {{base}}/api/facturas?estado=PAGADA
+
+### montoMinimo no finito: 400 problem+json que nombra montoMinimo
+GET {{base}}/api/facturas?montoMinimo=NaN
+
+### Fecha mal formada: 400 problem+json que nombra fechaDesde y el formato yyyy-MM-dd
+GET {{base}}/api/facturas?fechaDesde=05/11/2026
+
+### ---------------------------------------------------------------- Detalle
+
+### Detalle de una factura existente (ajustar el id al listado): 200 con cabecera y renglones
+GET {{base}}/api/facturas/1
+
+### Factura inexistente: 404 problem+json que menciona el id
+GET {{base}}/api/facturas/999999
+
+### Id no numérico: 400 problem+json que menciona el parámetro id
+GET {{base}}/api/facturas/abc
+
+### ---------------------------------------------------------------- Reporte (mismos filtros que el listado)
+
+### formato=pdf: 200 application/pdf, attachment; filename="facturas.pdf"
+GET {{base}}/api/facturas/reporte?formato=pdf
+
+### formato=xlsx: 200 hoja de cálculo, filename="facturas.xlsx"
+GET {{base}}/api/facturas/reporte?formato=xlsx
+
+### formato=excel (alias de xlsx): 200 igual que xlsx
+GET {{base}}/api/facturas/reporte?formato=excel
+
+### formato=txt: 200 text/plain;charset=UTF-8, filename="facturas.txt"
+GET {{base}}/api/facturas/reporte?formato=txt
+
+### formato=tsv (alias de txt): 200 igual que txt
+GET {{base}}/api/facturas/reporte?formato=tsv
+
+### Sin formato: 200 PDF por defecto
+GET {{base}}/api/facturas/reporte
+
+### Reporte filtrado: solo las EMITIDA en TXT
+GET {{base}}/api/facturas/reporte?formato=txt&estado=EMITIDA
+
+### Formato no admitido: 400 problem+json con el valor y los formatos admitidos, sin Content-Disposition
+GET {{base}}/api/facturas/reporte?formato=doc
+
+### ---------------------------------------------------------------- Catálogos (solo lectura)
+
+### Puntos de venta: 200 con opciones id/etiqueta/valor/codigoMoneda
+GET {{base}}/api/catalogos/puntos-venta
+
+### Clientes
+GET {{base}}/api/catalogos/clientes
+
+### Condiciones frente al IVA
+GET {{base}}/api/catalogos/condiciones-iva
+
+### Tipos de moneda (codigoMoneda con el código PES, DOL)
+GET {{base}}/api/catalogos/tipos-moneda
+
+### Artículos por lista de precios (el id es el de la oferta, valor es el precio de venta)
+GET {{base}}/api/catalogos/lista-precio-articulos
+
+### Alta en un catálogo: 405 problem+json (no hay CRUD de catálogos)
+POST {{base}}/api/catalogos/clientes
+Content-Type: application/json
+
+{"denominacion": "Nuevo"}
+
+### ---------------------------------------------------------------- CORS
+
+### Origen admitido: 200 con Access-Control-Allow-Origin: http://localhost:5173
+GET {{base}}/api/facturas
+Origin: http://localhost:5173
+
+### Origen no admitido: 403 sin Access-Control-Allow-Origin (CORS no autentica: sin el encabezado Origin, como curl, responde normal)
+GET {{base}}/api/facturas
+Origin: http://evil.example
