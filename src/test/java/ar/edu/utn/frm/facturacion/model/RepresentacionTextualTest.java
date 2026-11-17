@@ -45,4 +45,35 @@ class RepresentacionTextualTest {
 
         assertThat(marca.toString()).doesNotContain("usuarioCarga", "usuarioModificacion");
     }
+
+    @Test
+    void detalleEnlazadoASuFacturaNoRecurreNiIncluyeLaFactura() {
+        FacturaVenta factura = new FacturaVenta();
+        FacturaVentaDetalle detalle = new FacturaVentaDetalle();
+        detalle.setDescripcion("Martillo");
+        factura.agregarDetalle(detalle);
+
+        String texto = detalle.toString();
+
+        assertThat(factura.getDetalles()).containsExactly(detalle);
+        assertThat(detalle.getFactura()).isSameAs(factura);
+        assertThat(texto).contains("descripcion=Martillo").doesNotContain("factura=");
+    }
+
+    @Test
+    void identificadorHeredadoApareceEnLaRepresentacionDeUnaFactura() {
+        FacturaVenta factura = new FacturaVenta();
+        factura.setId(42L);
+
+        assertThat(factura.toString()).contains("id=42");
+    }
+
+    @Test
+    void identificadorHeredadoApareceEnLaRepresentacionDeUnUsuario() {
+        Usuario usuario = new Usuario();
+        usuario.setId(7L);
+        usuario.setUsuario("sistema");
+
+        assertThat(usuario.toString()).contains("id=7", "sistema");
+    }
 }

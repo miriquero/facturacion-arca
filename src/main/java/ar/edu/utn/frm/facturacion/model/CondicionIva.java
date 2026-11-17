@@ -13,7 +13,7 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
+@ToString(callSuper = true)
 public class CondicionIva extends AuditoriaApp {
 
     @Column(name = "codigo_afip", nullable = false)

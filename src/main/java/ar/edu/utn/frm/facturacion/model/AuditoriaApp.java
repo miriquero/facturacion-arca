@@ -18,6 +18,7 @@ import lombok.ToString;
  * contexto está vacío los usuarios quedan nulos y la base rechaza el INSERT (NOT NULL).
  */
 @Getter
+@ToString(callSuper = true)
 @Setter
 @NoArgsConstructor
 @MappedSuperclass

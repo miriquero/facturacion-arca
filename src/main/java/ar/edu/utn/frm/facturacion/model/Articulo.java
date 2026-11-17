@@ -16,7 +16,7 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
+@ToString(callSuper = true)
 public class Articulo extends AuditoriaApp {
 
     @Column(nullable = false, length = 30)

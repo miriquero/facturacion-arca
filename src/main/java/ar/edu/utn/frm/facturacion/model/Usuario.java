@@ -15,7 +15,7 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
+@ToString(callSuper = true)
 public class Usuario extends EntityId {
 
     @Column(nullable = false, length = 50)

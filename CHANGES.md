@@ -141,7 +141,7 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
   - `knowledge-base/12_errores_frecuentes_y_glosario.md` §Errores frecuentes (cascadas, lado propietario)
 
 ### [C-03] `etapa-2-lombok-dto-jpql-reportes`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` archivado 2026-11-17 (179 pruebas en verde con JDK 17; muestras revisadas por el estudiante)
 - **Scope**:
   - Higiene Lombok: `compileOnly` + `annotationProcessor`; sin `@Data` indiscriminado; `toString/equals/hashCode` de cabecera excluyen `detalles`, detalle excluye `factura`; exclusiones coherentes con la herencia; test que demuestra ausencia de recursión (US-201, RN-GE-03).
   - `FacturaReporteDTO` (id, numeroFactura nulo en borrador, fechaEmision, clienteDenominacion, condicionIva, puntoVentaDescripcion, importeTotal, cantidadItems, estado texto, codigoMoneda) con constructor `Long` para COUNT y `EstadoFactura` (US-202).

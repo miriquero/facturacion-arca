@@ -21,4 +21,12 @@ class FacturacionApplicationTests {
         assertThat(contexto.getBeanNamesForAnnotation(
                 org.springframework.boot.autoconfigure.SpringBootApplication.class)).hasSize(1);
     }
+
+    @Test
+    void elContextoTieneElServicioDeReportesYUnRelojEnHoraArgentina() {
+        assertThat(contexto.getBeansOfType(ar.edu.utn.frm.facturacion.report.ReporteFacturasService.class))
+                .hasSize(1);
+        assertThat(contexto.getBean(java.time.Clock.class).getZone())
+                .isEqualTo(java.time.ZoneId.of("America/Argentina/Buenos_Aires"));
+    }
 }

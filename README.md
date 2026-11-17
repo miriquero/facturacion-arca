@@ -67,6 +67,16 @@ Informe de la etapa: [docs/etapa-1.md](docs/etapa-1.md).
 - Las pruebas de persistencia usan `@DataJpaTest` sobre H2 embebida (cada contexto con su propia base). Las tres pruebas `@SpringBootTest` de la etapa 0 usan el perfil `test`, que **excluye** el `DataLoader` para que no escriba en la H2 compartida.
 - Las pruebas se corren con el comando de siempre: `./gradlew test`. PostgreSQL no se usó en esta etapa (ver `docs/etapa-1.md`).
 
+## Etapa 2: proyección y reportes
+
+Informe de la etapa: [docs/etapa-2.md](docs/etapa-2.md).
+
+- **Qué hay**: `FacturaReporteRepository` (fragmento con `EntityManager` y una consulta JPQL `SELECT new` a `FacturaReporteDTO`, sin cargar entidades) y `ReporteFacturasService`, que recibe una lista de `FacturaReporteDTO` y devuelve los **bytes** de un PDF (A4 apaisado), un Excel (hoja `Facturas`, totales `SUMIFS` por moneda) o un TXT (UTF-8, tabulaciones, escapes reversibles). Todavía **no hay endpoints**: se exponen en la etapa 3.
+- **Muestras**: `./gradlew test` (o `./gradlew test --tests '*MuestrasReportesTest'`) deja en `build/muestras-reportes/` los archivos `facturas.pdf`, `facturas-varias-paginas.pdf`, `facturas.xlsx` y `facturas.txt` para revisarlos a ojo (PDF en un visor, Excel en Excel o LibreOffice, TXT en un editor UTF-8). Esa carpeta no se versiona y `./gradlew clean` la borra.
+- **Fuente del PDF**: `src/main/resources/fonts/NotoSansCJKsc-Regular.otf` (Noto Sans CJK SC, descargada de <https://github.com/notofonts/noto-cjk>, ~16 MB, versionada sin Git LFS) y su licencia `fonts/OFL.txt` (SIL Open Font License 1.1); ambas viajan en el JAR. Si el PDF falla con «No se encontró la fuente», falta ese archivo en el classpath. Un carácter sin glifo en la fuente (p. ej. U+E000) rechaza el PDF con `GlifoNoSoportadoException`; Excel y TXT sí lo conservan.
+- **Nota sobre Excel**: `autoSizeColumn` mide el texto con las fuentes del sistema (AWT); en Windows funciona, en un servidor sin fuentes los anchos podrían calcularse raros.
+- **Pruebas**: se corren con `./gradlew test` (179 pruebas en total tras esta etapa), sobre H2 en memoria. PostgreSQL sigue sin probarse (antes de la etapa 4).
+
 ## Perfil PostgreSQL
 
 1. Levantar el contenedor (PostgreSQL 16, base/usuario/contrasena `facturacion`, puerto 5432, volumen `pgdata`):

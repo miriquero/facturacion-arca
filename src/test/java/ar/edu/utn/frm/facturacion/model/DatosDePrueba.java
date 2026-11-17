@@ -1,12 +1,12 @@
 package ar.edu.utn.frm.facturacion.model;
 
 /** Métodos fábrica para armar entidades en las pruebas sin repetir el armado en cada clase. */
-final class DatosDePrueba {
+public final class DatosDePrueba {
 
     private DatosDePrueba() {
     }
 
-    static Usuario usuario(String identificador) {
+    public static Usuario usuario(String identificador) {
         Usuario u = new Usuario();
         u.setUsuario(identificador);
         u.setClave("1234");
@@ -15,28 +15,28 @@ final class DatosDePrueba {
         return u;
     }
 
-    static Marca marca(String denominacion, int codigo) {
+    public static Marca marca(String denominacion, int codigo) {
         Marca m = new Marca();
         m.setDenominacion(denominacion);
         m.setCodigo(codigo);
         return m;
     }
 
-    static Rubro rubro(String denominacion, int codigo) {
+    public static Rubro rubro(String denominacion, int codigo) {
         Rubro r = new Rubro();
         r.setDenominacion(denominacion);
         r.setCodigo(codigo);
         return r;
     }
 
-    static CondicionIva condicionIva(int codigoAfip, String denominacion) {
+    public static CondicionIva condicionIva(int codigoAfip, String denominacion) {
         CondicionIva c = new CondicionIva();
         c.setCodigoAfip(codigoAfip);
         c.setDenominacion(denominacion);
         return c;
     }
 
-    static TipoMoneda tipoMoneda(String codigoAfip, String denominacion, String simbolo) {
+    public static TipoMoneda tipoMoneda(String codigoAfip, String denominacion, String simbolo) {
         TipoMoneda t = new TipoMoneda();
         t.setCodigoAfip(codigoAfip);
         t.setDenominacion(denominacion);
@@ -44,14 +44,14 @@ final class DatosDePrueba {
         return t;
     }
 
-    static ListaPrecio listaPrecio(String codigo, String denominacion) {
+    public static ListaPrecio listaPrecio(String codigo, String denominacion) {
         ListaPrecio l = new ListaPrecio();
         l.setCodigo(codigo);
         l.setDenominacion(denominacion);
         return l;
     }
 
-    static PuntoVenta puntoVenta(int numero) {
+    public static PuntoVenta puntoVenta(int numero) {
         PuntoVenta p = new PuntoVenta();
         p.setNumero(numero);
         p.setDescripcion("Punto de venta " + numero);
@@ -60,7 +60,7 @@ final class DatosDePrueba {
         return p;
     }
 
-    static Articulo articulo(String codigo, String denominacion, Marca marca, Rubro rubro, Double alicuotaIva) {
+    public static Articulo articulo(String codigo, String denominacion, Marca marca, Rubro rubro, Double alicuotaIva) {
         Articulo a = new Articulo();
         a.setCodigo(codigo);
         a.setDenominacion(denominacion);
@@ -70,7 +70,7 @@ final class DatosDePrueba {
         return a;
     }
 
-    static ListaPrecioArticulo precio(ListaPrecio lista, Articulo articulo, double precioVenta) {
+    public static ListaPrecioArticulo precio(ListaPrecio lista, Articulo articulo, double precioVenta) {
         ListaPrecioArticulo p = new ListaPrecioArticulo();
         p.setListaPrecio(lista);
         p.setArticulo(articulo);
@@ -78,7 +78,7 @@ final class DatosDePrueba {
         return p;
     }
 
-    static Contacto contacto(String email) {
+    public static Contacto contacto(String email) {
         Contacto c = new Contacto();
         c.setEmail(email);
         c.setTelefono("2615550000");
@@ -86,14 +86,14 @@ final class DatosDePrueba {
         return c;
     }
 
-    static Domicilio domicilio(String calle, String numero) {
+    public static Domicilio domicilio(String calle, String numero) {
         Domicilio d = new Domicilio();
         d.setNombreCalle(calle);
         d.setNumeroCalle(numero);
         return d;
     }
 
-    static Cliente cliente(String denominacion, String cuit, Contacto contacto, Domicilio domicilio) {
+    public static Cliente cliente(String denominacion, String cuit, Contacto contacto, Domicilio domicilio) {
         Cliente c = new Cliente();
         c.setDenominacion(denominacion);
         c.setCuitCuil(cuit);
@@ -102,7 +102,7 @@ final class DatosDePrueba {
         return c;
     }
 
-    static FacturaVentaDetalle detalle(ListaPrecioArticulo precio, double cantidad, double precioUnitario) {
+    public static FacturaVentaDetalle detalle(ListaPrecioArticulo precio, double cantidad, double precioUnitario) {
         FacturaVentaDetalle d = new FacturaVentaDetalle();
         d.setListaPrecioArticulo(precio);
         d.setDescripcion("Renglón de prueba");
@@ -113,7 +113,7 @@ final class DatosDePrueba {
     }
 
     /** Factura en BORRADOR (sin número ni CAE) con la fecha y el total indicados como datos literales. */
-    static FacturaVenta facturaBorrador(PuntoVenta puntoVenta, CondicionIva condicion, TipoMoneda moneda,
+    public static FacturaVenta facturaBorrador(PuntoVenta puntoVenta, CondicionIva condicion, TipoMoneda moneda,
             Cliente cliente) {
         FacturaVenta f = new FacturaVenta();
         f.setFechaEmision(java.time.LocalDate.of(2026, 11, 11));

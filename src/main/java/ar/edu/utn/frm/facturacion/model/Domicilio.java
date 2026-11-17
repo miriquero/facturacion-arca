@@ -14,7 +14,7 @@ import lombok.ToString;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
+@ToString(callSuper = true)
 public class Domicilio extends EntityId {
 
     @Column(name = "nombre_calle")
