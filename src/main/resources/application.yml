@@ -16,6 +16,14 @@ spring:
     properties:
       hibernate:
         format_sql: true
+facturacion:
+  cors:
+    # Orígenes del frontend local que pueden leer la API desde un navegador (no es autenticación).
+    allowed-origins:
+      - http://localhost:5173
+      - http://localhost:3000
+      - http://127.0.0.1:5173
+      - http://127.0.0.1:3000
 ---
 spring:
   config:

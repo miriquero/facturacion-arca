@@ -167,7 +167,7 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
 ## FASE 3 — API REST (Semanas 6-8, 40 % del 70 %)
 
 ### [C-04] `etapa-3-api-rest-lectura`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` archivado 2026-11-17 (320 pruebas en verde con JDK 17; código HTTP del glifo pendiente de confirmar con el docente, IN-03)
 - **Scope**:
   - `GET /api/facturas` → `List<FacturaReporteDTO>` con filtros opcionales (fechas desde/hasta inclusivas, estado, monto mínimo, según consigna), orden fecha DESC/id DESC, sin resultados = `[]`; estado normalizado (trim + mayúsculas); estado desconocido, fechas invertidas, monto no finito → 400 (US-301, RN-FI-01..06).
   - `GET /api/facturas/{id}` → `FacturaDetalladaDTO` (ids y descripciones editables, estado, importes, CAE, observaciones, renglones); 404 si no existe; asociaciones resueltas en servicio con `open-in-view=false` (US-302).

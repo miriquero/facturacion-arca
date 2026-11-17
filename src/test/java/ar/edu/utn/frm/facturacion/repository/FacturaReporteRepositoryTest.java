@@ -187,4 +187,109 @@ class FacturaReporteRepositoryTest extends FacturaBase {
         assertThat(repositorio.findAll()).hasSize(1);
         assertThat(sesion.getStatistics().getEntityCount()).isPositive();
     }
+
+    // --- Filtros (etapa 3) ---
+
+    /** Tres facturas EMITIDA del 2026-11-01, 2026-11-05 y 2026-11-10; devuelve los ids en ese orden. */
+    private List<Long> tresFechas() {
+        FacturaVenta del01 = guardar(1L, LocalDate.of(2026, 11, 1), 10.00, EstadoFactura.EMITIDA, ferreteria, pesos, 1);
+        FacturaVenta del05 = guardar(2L, LocalDate.of(2026, 11, 5), 10.00, EstadoFactura.EMITIDA, ferreteria, pesos, 1);
+        FacturaVenta del10 = guardar(3L, LocalDate.of(2026, 11, 10), 10.00, EstadoFactura.EMITIDA, ferreteria, pesos, 1);
+        return List.of(del01.getId(), del05.getId(), del10.getId());
+    }
+
+    @Test
+    void limitesDeFechaIncluidos() {
+        List<Long> ids = tresFechas();
+
+        List<FacturaReporteDTO> reporte = repositorio.buscarReporte(
+                new FiltroFacturas(LocalDate.of(2026, 11, 5), LocalDate.of(2026, 11, 10), null, null));
+
+        assertThat(reporte).extracting(FacturaReporteDTO::getId).containsExactly(ids.get(2), ids.get(1));
+    }
+
+    @Test
+    void soloFechaHastaIncluyeElLimite() {
+        List<Long> ids = tresFechas();
+
+        List<FacturaReporteDTO> reporte = repositorio.buscarReporte(
+                new FiltroFacturas(null, LocalDate.of(2026, 11, 5), null, null));
+
+        assertThat(reporte).extracting(FacturaReporteDTO::getId).containsExactly(ids.get(1), ids.get(0));
+    }
+
+    @Test
+    void soloAnuladas() {
+        guardar(null, LocalDate.of(2026, 11, 1), 10.00, EstadoFactura.BORRADOR, ferreteria, pesos, 1);
+        guardar(1L, LocalDate.of(2026, 11, 2), 20.00, EstadoFactura.EMITIDA, ferreteria, pesos, 1);
+        FacturaVenta anulada = guardar(2L, LocalDate.of(2026, 11, 3), 30.00, EstadoFactura.ANULADA, ferreteria, pesos, 1);
+
+        List<FacturaReporteDTO> reporte = repositorio.buscarReporte(
+                new FiltroFacturas(null, null, EstadoFactura.ANULADA, null));
+
+        assertThat(reporte).extracting(FacturaReporteDTO::getId).containsExactly(anulada.getId());
+        assertThat(reporte.get(0).getEstado()).isEqualTo("ANULADA");
+    }
+
+    @Test
+    void totalIgualAlMinimoSeIncluyeConUnImporteNoRepresentableExacto() {
+        guardar(1L, LocalDate.of(2026, 11, 1), 100.00, EstadoFactura.EMITIDA, ferreteria, pesos, 1);
+        FacturaVenta de100con10 = guardar(2L, LocalDate.of(2026, 11, 2), 100.10, EstadoFactura.EMITIDA, ferreteria, pesos, 1);
+        FacturaVenta de250 = guardar(3L, LocalDate.of(2026, 11, 3), 250.00, EstadoFactura.EMITIDA, ferreteria, pesos, 1);
+
+        List<FacturaReporteDTO> reporte = repositorio.buscarReporte(new FiltroFacturas(null, null, null, 100.10));
+
+        assertThat(reporte).extracting(FacturaReporteDTO::getId).containsExactly(de250.getId(), de100con10.getId());
+        assertThat(reporte).extracting(FacturaReporteDTO::getImporteTotal).containsExactly(250.00, 100.10);
+    }
+
+    @Test
+    void minimoNegativoNoExcluyeNada() {
+        tresFechas();
+
+        assertThat(repositorio.buscarReporte(new FiltroFacturas(null, null, null, -50.0))).hasSize(3);
+    }
+
+    @Test
+    void filtrosSinCoincidenciasDevuelvenListaVacia() {
+        guardar(1L, LocalDate.of(2026, 11, 1), 10.00, EstadoFactura.EMITIDA, ferreteria, pesos, 1);
+
+        assertThat(repositorio.buscarReporte(new FiltroFacturas(null, null, EstadoFactura.ANULADA, null))).isEmpty();
+        assertThat(repositorio.buscarReporte(new FiltroFacturas(null, null, null, 999999999.0))).isEmpty();
+    }
+
+    @Test
+    void filtrosVaciosDanLoMismoQueLaConsultaSinFiltros() {
+        guardar(null, LocalDate.of(2026, 11, 1), 10.00, EstadoFactura.BORRADOR, null, pesos, 0);
+        guardar(1L, LocalDate.of(2026, 11, 5), 20.00, EstadoFactura.EMITIDA, ferreteria, dolares, 2);
+        guardar(2L, LocalDate.of(2026, 11, 5), 30.00, EstadoFactura.ANULADA, ferreteria, pesos, 1);
+
+        assertThat(repositorio.buscarReporte(FiltroFacturas.SIN_FILTROS)).hasSize(3)
+                .containsExactlyElementsOf(repositorio.buscarReporte());
+    }
+
+    @Test
+    void filtrosCombinadosConservanFacturaSinClienteYSinRenglones() {
+        FacturaVenta sinClienteNiRenglones = guardar(1L, LocalDate.of(2026, 11, 5), 500.00, EstadoFactura.EMITIDA,
+                null, pesos, 0);
+        guardar(2L, LocalDate.of(2026, 11, 5), 50.00, EstadoFactura.EMITIDA, ferreteria, pesos, 1);
+        guardar(null, LocalDate.of(2026, 11, 5), 500.00, EstadoFactura.BORRADOR, ferreteria, pesos, 1);
+
+        List<FacturaReporteDTO> reporte = repositorio.buscarReporte(
+                new FiltroFacturas(LocalDate.of(2026, 11, 1), null, EstadoFactura.EMITIDA, 100.0));
+
+        assertThat(reporte).hasSize(1);
+        assertThat(reporte.get(0).getId()).isEqualTo(sinClienteNiRenglones.getId());
+        assertThat(reporte.get(0).getClienteDenominacion()).isEqualTo("Consumidor Final");
+        assertThat(reporte.get(0).getCantidadItems()).isZero();
+    }
+
+    @Test
+    void losValoresDeLosFiltrosNoEntranEnElTextoDeLaConsulta() {
+        String texto = new FacturaReporteRepositoryImpl(null).jpql(
+                new FiltroFacturas(LocalDate.of(2026, 11, 5), null, EstadoFactura.EMITIDA, 123.45));
+
+        assertThat(texto).contains(":fechaDesde", ":estado", ":montoMinimo");
+        assertThat(texto).doesNotContain("2026-11-05", "EMITIDA", "123.45");
+    }
 }
