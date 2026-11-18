@@ -3,7 +3,7 @@ package ar.edu.utn.frm.facturacion.model;
 /**
  * Contexto de auditoría por hilo: guarda el usuario que está operando para que
  * {@link AuditoriaApp} complete los datos de alta sin que cada llamador los pase a mano.
- * En la etapa 4 lo llenará el interceptor de {@code X-Usuario}; en la etapa 1 lo usa el
+ * En la API lo llena y limpia el {@code UsuarioActualInterceptor} (encabezado {@code X-Usuario}); lo usa también el
  * {@code DataLoader}. Siempre hay que llamar a {@link #clear()} al terminar.
  */
 public final class UsuarioActual {

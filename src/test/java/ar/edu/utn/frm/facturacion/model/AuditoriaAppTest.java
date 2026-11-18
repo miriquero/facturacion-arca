@@ -114,4 +114,48 @@ class AuditoriaAppTest {
         assertThat(unidad.isLoaded(leida, "usuarioCarga")).isFalse();
         assertThat(unidad.isLoaded(leida, "usuarioModificacion")).isFalse();
     }
+
+    @Test
+    void modificacionCompletadaConElUsuarioDelContextoActual() {
+        Marca original = persistirYReleer(marca("Acme", 100));
+        LocalDateTime alta = original.getFechaAlta();
+
+        UsuarioActual.set(acortez);
+        original.setDenominacion("Acme modificada");
+        em.flush();
+        em.clear();
+
+        Marca releida = marcaRepository.findById(original.getId()).orElseThrow();
+        assertThat(releida.getUsuarioModificacion().getId()).isEqualTo(acortez.getId());
+        assertThat(releida.getUsuarioCarga().getId()).isEqualTo(sistema.getId());
+        assertThat(releida.getFechaAlta()).isEqualTo(alta);
+        assertThat(releida.getFechaModificacion()).isAfterOrEqualTo(alta);
+    }
+
+    @Test
+    void modificarConElContextoVacioEsRechazadoPorLaBase() {
+        // Política estricta: sin usuario en el contexto, un UPDATE falla igual que un alta (NOT NULL).
+        Marca original = persistirYReleer(marca("Acme", 100));
+
+        UsuarioActual.clear();
+        original.setDenominacion("Acme modificada");
+
+        assertThatThrownBy(() -> marcaRepository.saveAndFlush(original))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void darDeBajaRegistraFechaYUsuarioDelContextoYLaFilaSigueExistiendo() {
+        Marca original = persistirYReleer(marca("Acme", 100));
+        UsuarioActual.set(acortez);
+
+        original.darDeBaja();
+        em.flush();
+        em.clear();
+
+        Marca releida = marcaRepository.findById(original.getId()).orElseThrow();
+        assertThat(releida.getFechaBaja()).isNotNull().isAfterOrEqualTo(releida.getFechaAlta());
+        assertThat(releida.getUsuarioBaja().getId()).isEqualTo(acortez.getId());
+        assertThat(marcaRepository.count()).isEqualTo(1);
+    }
 }

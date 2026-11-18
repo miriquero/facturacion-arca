@@ -17,6 +17,8 @@ spring:
       hibernate:
         format_sql: true
 facturacion:
+  iva-por-defecto: 21
+  usuario-por-defecto: sistema
   cors:
     # Orígenes del frontend local que pueden leer la API desde un navegador (no es autenticación).
     allowed-origins:
