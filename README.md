@@ -172,7 +172,7 @@ Los comandos son los mismos en PowerShell y Bash. La URL base de la API se lee d
 
 ## Etapa 5: frontend en TypeScript
 
-Cliente web sin framework ni bundler (HTML, CSS y TypeScript estricto con modulos ES2020): consulta con filtros, alta y edicion de borradores, emision, anulacion, eliminacion y descargas PDF/Excel. El informe esta en [docs/etapa-5.md](docs/etapa-5.md) (decisiones, control asincrono, accesibilidad, recorrido con el backend real, limites de la simulacion y checklist de teclado y lector de pantalla para revisar a mano). Las muestras de descarga y las capturas estan en `docs/evidencia/etapa-5/`.
+Cliente web sin framework ni bundler (HTML, CSS y TypeScript estricto con modulos ES2020): consulta con filtros, alta y edicion de borradores, emision, anulacion, eliminacion y descargas PDF/Excel. Desde la etapa 7 esas funciones se reparten en tres pantallas con direccion propia (ver «Etapa 7: pantallas»); en la etapa 5 era una sola pagina. El informe esta en [docs/etapa-5.md](docs/etapa-5.md) (decisiones, control asincrono, accesibilidad, recorrido con el backend real, limites de la simulacion y checklist de teclado y lector de pantalla para revisar a mano). Las muestras de descarga y las capturas estan en `docs/evidencia/etapa-5/`.
 
 **Requisitos**: Node 18.13 o superior (verificado con v24.22.1) y, para el backend, el JDK 17 (ver «Fijar JAVA_HOME»). No hay dependencias nuevas: `npm ci` instala las del `package-lock.json`.
 
@@ -226,6 +226,22 @@ Cambios pedidos en clase el 2026-11-18 (ARCA sigue **simulada**: ni login, ni co
 
 **Límites conocidos**: catálogos sin tope de resultados; el catálogo de artículos trae `codigoMoneda` nulo (el explorador muestra el precio sin moneda); «informada» incluye ANULADA (supuesto a confirmar con el docente); el checklist de teclado, lector de pantalla, zoom y descarga real lo completa el estudiante en `docs/etapa-6.md`.
 
+## Etapa 7: pantallas
+
+El frontend deja de ser una sola pagina: son **tres pantallas con direccion propia**, navegables con la barra superior, con enlaces, con Atras y Adelante del navegador y con recarga. Es un cambio solo de frontend: el backend, el contrato HTTP, `package.json` y `tsconfig.json` no cambian. El informe esta en [docs/etapa-7.md](docs/etapa-7.md) (decisiones, rutas, pruebas existentes que cambiaron, mutaciones, recorrido real contra simulado, accesibilidad y checklist para revisar a mano). Las capturas estan en `docs/evidencia/etapa-7/`.
+
+| Direccion | Pantalla | Que hace |
+|-----------|----------|----------|
+| `#/` (o sin fragmento) | Listado | Filtros, tabla, paginacion y descargas PDF/Excel. Cada fila ofrece «Ver» e «Imprimir PDF» (solo informadas); ningun boton de accion |
+| `#/nueva` | Alta | Formulario vacio de borrador con el explorador modal de clientes y articulos |
+| `#/factura/{id}` | Detalle | Datos, renglones, importes y CAE. Borrador: Editar, Emitir, Eliminar; emitida: Anular e Imprimir PDF; anulada: Imprimir PDF; siempre «Volver al listado» |
+| `#/factura/{id}/editar` | Edicion | Formulario cargado con el borrador; si ya no es borrador o no existe, vuelve al detalle o al listado con el error |
+| cualquier otra | Listado | Muestra el listado y explica en la region de estado que la direccion no existe |
+
+**Como navegar**: abrir `http://localhost:5173/` y usar «Facturas» y «Nueva factura» de la barra o el enlace «Ver» de cada fila; se puede abrir directamente `http://localhost:5173/#/factura/5`. Al volver al listado se conservan los filtros, el cliente elegido y la pagina, y se vuelve a pedir esa pagina para reflejar lo que se hizo en el detalle. Despues de guardar, emitir, anular o eliminar, el mensaje de exito aparece en la pantalla a la que se navega. Si se sale de una pantalla con un pedido en curso, la respuesta tardia se descarta.
+
+**Accesibilidad**: un `h1` por pantalla (el foco va a el al navegar), `document.title` con el nombre de la pantalla, `aria-current="page"` en la barra, una sola region de estado compartida, pantallas ocultas con `hidden` (sus controles no entran en el orden de Tab) y objetivos de al menos 44 px.
+
 ## Verificaciones y motor
 
 Fecha: 2026-11-11. JDK 17.0.20.1 (Microsoft), Gradle 8.10.2, Node v24.22.1, npm 11.19.1, Docker 29.2.1 / Compose v5.1.0.
@@ -250,6 +266,10 @@ Fecha: 2026-11-11. JDK 17.0.20.1 (Microsoft), Gradle 8.10.2, Node v24.22.1, npm 
 | Etapa 6: `requests.http` (paginación, filtros nuevos, `?q=`, PDF por factura, reporte) contra `java -jar` con JDK 17 | H2 en memoria | OK, pedido por pedido con `curl` |
 | Etapa 6: recorrido manual en el navegador integrado (Chromium) con backend y frontend reales | H2 en memoria | OK: explorador con `showModal()` real, filtros, paginación, alta, edición, emisión, anulación y eliminación. **Simulados**: `confirm` y `prompt`; algunas cargas se dispararon por `requestSubmit()`/eventos. **No observado**: la descarga real del archivo en el navegador (solo el `href` y `curl`). **Solo jsdom**: doble clic, respuestas obsoletas y errores por campo. **No verificado**: lector de pantalla, zoom real, reflujo y contraste medido en pantalla |
 | Etapa 6: `openspec validate etapa-6-requisitos-docente --strict` | n/a | válido |
+| Etapa 7 (2026-11-18): `cd frontend && npm test && npm run build` | n/a (jsdom, sin red) | OK: **317 pruebas** (244 de base), 0 fallas; `tsc` estricto sin errores; sin `innerHTML`, `outerHTML`, `insertAdjacentHTML` ni `new Date` en `frontend/src`; `package.json` y `tsconfig.json` sin cambios |
+| Etapa 7: `./gradlew test --rerun` con JDK 17 (sin `clean` ni `bootJar`: el JAR lo usa el servidor del estudiante) | H2 en memoria | OK: **620 pruebas de backend**, 0 fallas; el backend no se modifico |
+| Etapa 7: recorrido manual en el navegador integrado (Chromium) con el backend y el `http-server` reales del estudiante | H2 en memoria | OK: navegacion por barra y enlaces, Atras/Adelante y recarga en cada direccion, ruta desconocida y 404 real, filtros y pagina conservados, explorador con `showModal()` real (Escape, cierre al navegar), alta, edicion, emision, 409 real y foco. **Simulados** `confirm` y `prompt` (anular y eliminar); el PDF solo con `curl`; sin lector de pantalla, zoom ni orden de Tab real. Detalle y hallazgo del foco en [docs/etapa-7.md](docs/etapa-7.md) |
+| Etapa 7: `openspec validate etapa-7-pantallas --strict` | n/a | válido |
 
 Versiones de herramientas no fijadas por la consigna: `io.spring.dependency-management` 1.1.6, `http-server` ^14.1.1, `jsdom` ^25.0.0; `package-lock.json` congela las exactas.
 

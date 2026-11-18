@@ -274,3 +274,27 @@ test('Hallazgo del recorrido real: el catalogo de articulos viene con codigoMone
   await esperarTareas();
   assert.deepEqual(t.nombres(), ['ART-003 - Cable HDMI (GENERAL) — 8.000,00']);
 });
+
+// ---- Etapa 7: cerrar desde afuera (al salir de la pantalla) ----
+
+test('cerrar() con el explorador abierto: lo cierra, resuelve null y devuelve el foco al disparador', async () => {
+  const t = montar();
+  const promesa = t.abrir();
+  assert.equal(t.$('explorador').open, true);
+  t.explorador.cerrar();
+  assert.equal(await promesa, null);
+  assert.equal(t.$('explorador').open, false);
+  assert.deepEqual(t.modal.cierres, ['explorador']);
+  assert.equal(t.doc.activeElement, t.disparador);
+});
+
+test('cerrar() sin explorador abierto no hace nada y el siguiente elegir() funciona', async () => {
+  const t = montar();
+  t.explorador.cerrar();
+  assert.deepEqual(t.modal.cierres, []);
+  const promesa = t.abrir();
+  t.busquedas[0].resolver(CLIENTES);
+  await esperarTareas();
+  [...t.$('explorador-resultados').querySelectorAll('button')][0].click();
+  assert.deepEqual(await promesa, CLIENTES[0]);
+});

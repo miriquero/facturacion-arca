@@ -251,7 +251,20 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
   - Imprimir el PDF de **una** factura con CAE («CAI» en la pizarra) y fecha de vencimiento (hoy solo existe el PDF de listado, sin CAE).
 - **Dependencias**: `C-06`
 - **Governance**: MEDIO (cambia el contrato del listado de la etapa 3 y del frontend de la etapa 5)
-- **Tag**: a definir con el docente (la consigna dice que se evalúa la versión del tag entregado).
+- **Tag**: `etapa-6` (creado el 2026-11-18 sobre `main`; el docente puede pedir otro nombre).
+
+### [C-08] `etapa-7-pantallas`
+- **Estado**: `[x]` archivado 2026-11-18 (317 pruebas de frontend y 620 de backend en verde; recorrido en navegador real; revisión de accesibilidad con teclado y lector de pantalla a cargo del estudiante; tag a definir)
+- **Origen**: pedido del estudiante el 2026-11-18, después del tag `etapa-6`: dividir la aplicación, que hoy tiene filtros, tabla y formulario en una sola página, en **tres pantallas**: listado, alta y edición, y detalle de una factura. No cambia el backend ni el contrato HTTP.
+- **Scope**:
+  - Navegación entre pantallas sin framework ni bundler (HTML, CSS y TypeScript con módulos ES2020), con direcciones propias, botón Atrás del navegador y foco accesible al cambiar de pantalla.
+  - Pantalla de listado: filtros, tabla, paginación y descargas, conservando los filtros y la página al volver.
+  - Pantalla de alta y edición: formulario con los exploradores modales.
+  - Pantalla de detalle: cabecera, cliente, renglones, importes, CAE y vencimiento, con las acciones según el estado (editar, emitir, anular, eliminar, Imprimir PDF).
+  - Se conservan las reglas de las etapas 5 y 6: `strict`, `textContent`, región de estado, bloqueo de doble envío, descarte de respuestas obsoletas y cancelar sin enviar.
+- **Dependencias**: `C-07`
+- **Governance**: MEDIO (reorganiza el frontend entregado; riesgo de regresión en las pruebas existentes)
+- **Tag**: a definir.
 
 ---
 
@@ -265,6 +278,7 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
 | C-04 | `etapa-3-api-rest-lectura` | 3 | 15 % | C-03 | MEDIO | `etapa-3` |
 | C-05 | `etapa-4-escritura-estados-concurrencia` | 4 | 25 % | C-04 | MEDIO | `etapa-4` |
 | C-06 | `etapa-5-frontend-typescript` | 5 | 20 % | C-05 | MEDIO | `etapa-5` |
-| C-07 | `etapa-6-requisitos-docente` | — | a definir | C-06 | MEDIO | a definir |
+| C-07 | `etapa-6-requisitos-docente` | — | a definir | C-06 | MEDIO | `etapa-6` |
+| C-08 | `etapa-7-pantallas` | — | a definir | C-07 | MEDIO | a definir |
 
 Primer change recomendado: `C-01` (`etapa-0-puesta-en-marcha`). Arrancar con `/opsx:propose etapa-0-puesta-en-marcha`.

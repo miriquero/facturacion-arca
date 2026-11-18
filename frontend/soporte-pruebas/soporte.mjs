@@ -64,9 +64,9 @@ export function fetchFalso(responder = () => respuesta(200, [])) {
 
 const htmlIndex = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-/** Pagina real (index.html) en jsdom, sin ejecutar scripts. */
-export function montarPagina() {
-  const dom = new JSDOM(htmlIndex, { url: 'http://localhost:5173/' });
+/** Pagina real (index.html) en jsdom, sin ejecutar scripts; `url` fija la direccion inicial (con su fragmento). */
+export function montarPagina(url = 'http://localhost:5173/') {
+  const dom = new JSDOM(htmlIndex, { url });
   return { dom, documento: dom.window.document, ventana: dom.window };
 }
 
@@ -168,3 +168,92 @@ export function ventanaModalFalsa() {
   };
   return v;
 }
+
+/**
+ * Espera el próximo `hashchange` de la ventana (jsdom lo dispara de forma asincrónica: con asignación, replace,
+ * history.back() y clic en un enlace de fragmento) y deja correr las tareas que dispara. Falla si no llega.
+ */
+export function esperarHashchange(ventana, ms = 1000) {
+  return new Promise((resolver, rechazar) => {
+    const temporizador = setTimeout(() => rechazar(new Error('No llegó hashchange')), ms);
+    ventana.addEventListener(
+      'hashchange',
+      () => {
+        clearTimeout(temporizador);
+        esperarTareas().then(resolver);
+      },
+      { once: true },
+    );
+  });
+}
+
+/** Espera, con sondeo, a que se cumpla una condicion (p. ej. un fragmento que llega tras una navegacion encadenada). */
+export async function esperarHasta(condicion, ms = 1000) {
+  const limite = Date.now() + ms;
+  while (!condicion()) {
+    if (Date.now() > limite) throw new Error('No se cumplio la condicion esperada');
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  await esperarTareas();
+}
+
+/**
+ * Arranca la aplicacion completa sobre index.html en jsdom con dobles (sin red) y espera la carga inicial.
+ * `url` fija la direccion de entrada (con su fragmento); `auto` y `dialogos` van al servicio y a los dialogos falsos.
+ * `navegar(fragmento)` cambia el fragmento como lo haria el usuario y espera el hashchange.
+ */
+export async function arrancarApp({ url = 'http://localhost:5173/', auto = {}, dialogos: opcionesDialogos = {}, esperarListo = true } = {}) {
+  const { iniciarAplicacion } = await import('../dist/aplicacion.js');
+  const pagina = montarPagina(url);
+  const dialogos = dialogosFalsos(opcionesDialogos);
+  const respuestas = { obtenerCatalogos: catalogosEjemplo(), obtenerFacturas: [], obtenerFactura: facturaDetallada(), ...auto };
+  // Un metodo en null queda sin respuesta automatica: la llamada devuelve un diferido que la prueba resuelve.
+  for (const [metodo, valor] of Object.entries(respuestas)) if (valor === null) delete respuestas[metodo];
+  const servicio = servicioFalso(respuestas);
+  const temporizador = temporizadorManual();
+  const ventanaModal = ventanaModalFalsa();
+  const app = iniciarAplicacion({ documento: pagina.documento, ventana: pagina.ventana, servicio, dialogos, temporizador, ventanaModal });
+  // Con la carga de la pantalla de entrada pendiente (diferido sin resolver) no se puede esperar a listo.
+  if (esperarListo) await app.listo;
+  const $ = (id) => pagina.documento.getElementById(id);
+  const visible = (id) => !$(id).hidden;
+  const navegar = async (fragmento) => {
+    const llegada = esperarHashchange(pagina.ventana);
+    pagina.ventana.location.hash = fragmento;
+    await llegada;
+  };
+  return { ...pagina, app, servicio, dialogos, temporizador, ventanaModal, $, visible, navegar };
+}
+
+/** Detalle de factura emitida de ejemplo (FacturaDetalladaDTO); extra pisa campos. */
+export const facturaDetallada = (extra = {}) => ({
+  id: 1,
+  numero: 4,
+  fechaEmision: '2026-11-01',
+  estado: 'EMITIDA',
+  clienteId: 2,
+  clienteDenominacion: 'Ana SA',
+  clienteCuitCuil: '30-71234567-1',
+  condicionIvaId: 2,
+  condicionIva: 'Responsable Inscripto',
+  puntoVentaId: 1,
+  puntoVentaNumero: 1,
+  puntoVentaDescripcion: '0001 - Casa Central',
+  tipoMonedaId: 1,
+  codigoMoneda: 'PES',
+  importeTotal: 6534,
+  importeCobrado: 0,
+  importeSaldo: 6534,
+  cae: '71234567890123',
+  caeFechaVencimiento: '2026-11-11',
+  resultadoAfip: 'A',
+  fechaAnulacion: null,
+  observaciones: null,
+  detalles: [
+    { id: 1, listaPrecioArticuloId: 1, articuloCodigo: 'MAR', descripcion: 'Martillo', cantidad: 2, precioUnitario: 3000, porcentajeBonificacion: 10, importeNeto: 5400, importeIva: 1134, importeSubtotal: 6534 },
+  ],
+  ...extra,
+});
+
+/** Detalle de un borrador de ejemplo (sin numero ni CAE). */
+export const borradorDetallado = (extra = {}) => facturaDetallada({ id: 6, numero: null, estado: 'BORRADOR', cae: null, caeFechaVencimiento: null, resultadoAfip: null, ...extra });

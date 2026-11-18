@@ -32,7 +32,7 @@ try {
     },
   };
 
-  iniciarAplicacion({ documento: document, servicio, dialogos, temporizador, ventanaModal });
+  iniciarAplicacion({ documento: document, servicio, dialogos, temporizador, ventanaModal, ventana: window });
 } catch (error) {
   const region = document.getElementById('estado');
   if (region) {

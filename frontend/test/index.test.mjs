@@ -71,7 +71,49 @@ test('ids unicos en todo el documento', () => {
   assert.deepEqual(ids.filter((id, i) => ids.indexOf(id) !== i), []);
 });
 
-test('una sola h1 y un landmark main', () => {
-  assert.equal(documento.querySelectorAll('h1').length, 1);
+// Cambio por el pedido (etapa 7): antes «una sola h1 y un landmark main»; ahora cada pantalla tiene su h1,
+// exactamente uno está visible (las demás secciones llevan hidden) y sigue habiendo un solo main.
+test('un h1 por pantalla, exactamente uno visible, y un main', () => {
+  const secciones = [...documento.querySelectorAll('main > section.pantalla')];
+  assert.equal(secciones.length, 3);
+  for (const seccion of secciones) {
+    const titulos = seccion.querySelectorAll('h1');
+    assert.equal(titulos.length, 1, seccion.id);
+    assert.equal(titulos[0].getAttribute('tabindex'), '-1', seccion.id);
+  }
+  assert.equal(documento.querySelectorAll('h1').length, 3);
+  assert.equal(documento.querySelectorAll('h1').length, documento.querySelectorAll('section.pantalla h1').length);
+  const visibles = secciones.filter((s) => !s.hidden);
+  assert.equal(visibles.length, 1);
   assert.equal(documento.querySelectorAll('main').length, 1);
+});
+
+test('las tres secciones de pantalla tienen los ids del diseno', () => {
+  assert.deepEqual(
+    [...documento.querySelectorAll('section.pantalla')].map((s) => s.id),
+    ['pantalla-listado', 'pantalla-formulario', 'pantalla-detalle'],
+  );
+});
+
+test('barra de navegacion nombrada con Facturas (#/) y Nueva factura (#/nueva)', () => {
+  const nav = documento.querySelector('nav[aria-label="Principal"]');
+  assert.ok(nav, 'falta la nav Principal');
+  const enlaces = [...nav.querySelectorAll('a')].map((a) => [a.textContent.trim(), a.getAttribute('href')]);
+  assert.deepEqual(enlaces, [
+    ['Facturas', '#/'],
+    ['Nueva factura', '#/nueva'],
+  ]);
+  assert.equal(nav.closest('section.pantalla'), null);
+});
+
+test('la region de estado y el dialogo explorador quedan fuera de las secciones de pantalla', () => {
+  assert.equal(documento.getElementById('estado').closest('section.pantalla'), null);
+  assert.equal(documento.getElementById('explorador').closest('section.pantalla'), null);
+  assert.equal(documento.querySelectorAll('dialog#explorador').length, 1);
+});
+
+test('el titulo del formulario es el h1 de su pantalla', () => {
+  const titulo = documento.getElementById('titulo-formulario');
+  assert.equal(titulo.tagName, 'H1');
+  assert.equal(titulo.closest('section.pantalla').id, 'pantalla-formulario');
 });
