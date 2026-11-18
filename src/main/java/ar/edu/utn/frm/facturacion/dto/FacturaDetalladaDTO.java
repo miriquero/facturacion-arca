@@ -11,6 +11,7 @@ public record FacturaDetalladaDTO(
         String estado,
         Long clienteId,
         String clienteDenominacion,
+        String clienteCuitCuil,
         Long condicionIvaId,
         String condicionIva,
         Long puntoVentaId,

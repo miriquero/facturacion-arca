@@ -51,15 +51,15 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
         FacturaVenta[] f = tresFechas();
 
         listar().andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(3))
-                .andExpect(jsonPath("$[0].id").value(f[2].getId()))
-                .andExpect(jsonPath("$[0].fechaEmision").value("2026-11-10"))
-                .andExpect(jsonPath("$[1].fechaEmision").value("2026-11-05"))
-                .andExpect(jsonPath("$[2].fechaEmision").value("2026-11-01"))
-                .andExpect(jsonPath("$[0].clienteDenominacion").value("Juan Servicios"))
-                .andExpect(jsonPath("$[0].condicionIva").value("Responsable Inscripto"))
-                .andExpect(jsonPath("$[0].puntoVentaDescripcion").value("Casa Central"))
-                .andExpect(jsonPath("$[0].codigoMoneda").value("PES"));
+                .andExpect(jsonPath("$.items.length()").value(3))
+                .andExpect(jsonPath("$.items[0].id").value(f[2].getId()))
+                .andExpect(jsonPath("$.items[0].fechaEmision").value("2026-11-10"))
+                .andExpect(jsonPath("$.items[1].fechaEmision").value("2026-11-05"))
+                .andExpect(jsonPath("$.items[2].fechaEmision").value("2026-11-01"))
+                .andExpect(jsonPath("$.items[0].clienteDenominacion").value("Juan Servicios"))
+                .andExpect(jsonPath("$.items[0].condicionIva").value("Responsable Inscripto"))
+                .andExpect(jsonPath("$.items[0].puntoVentaDescripcion").value("Casa Central"))
+                .andExpect(jsonPath("$.items[0].codigoMoneda").value("PES"));
     }
 
     @Test
@@ -67,9 +67,9 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
         tresFechas();
 
         listar("fechaDesde", "2026-11-05", "fechaHasta", "2026-11-10").andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].fechaEmision").value("2026-11-10"))
-                .andExpect(jsonPath("$[1].fechaEmision").value("2026-11-05"));
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].fechaEmision").value("2026-11-10"))
+                .andExpect(jsonPath("$.items[1].fechaEmision").value("2026-11-05"));
     }
 
     @Test
@@ -77,8 +77,8 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
         tresFechas();
 
         listar("fechaDesde", "2026-11-05", "fechaHasta", "2026-11-05").andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].fechaEmision").value("2026-11-05"));
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].fechaEmision").value("2026-11-05"));
     }
 
     @Test
@@ -86,7 +86,7 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
         tresFechas();
 
         listar("fechaDesde", "2026-11-05")
-                .andExpect(jsonPath("$[*].fechaEmision").value(contains("2026-11-10", "2026-11-05")));
+                .andExpect(jsonPath("$.items[*].fechaEmision").value(contains("2026-11-10", "2026-11-05")));
     }
 
     private void tresEstados() {
@@ -100,16 +100,16 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
         tresEstados();
 
         listar("estado", " emitida ").andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].estado").value("EMITIDA"));
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].estado").value("EMITIDA"));
     }
 
     @Test
     void estadoVacioEquivaleASinFiltro() throws Exception {
         tresEstados();
 
-        listar("estado", "  ").andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(3));
-        listar("estado", "").andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(3));
+        listar("estado", "  ").andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(3));
+        listar("estado", "").andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(3));
     }
 
     @Test
@@ -140,7 +140,7 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
     void minimoNegativoDevuelveTodas() throws Exception {
         tresFechas();
 
-        listar("montoMinimo", "-50").andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(3));
+        listar("montoMinimo", "-50").andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(3));
     }
 
     @Test
@@ -150,7 +150,7 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
         guardarFactura(3L, DEL_10, 250.00, EstadoFactura.EMITIDA, juan);
 
         listar("montoMinimo", "100.10").andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].importeTotal").value(contains(250.00, 100.10)));
+                .andExpect(jsonPath("$.items[*].importeTotal").value(contains(250.00, 100.10)));
     }
 
     @Test
@@ -162,36 +162,36 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
 
         listar("estado", "EMITIDA", "fechaDesde", "2026-11-01", "fechaHasta", "2026-11-30", "montoMinimo", "100")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].id").value(buscada.getId()))
-                .andExpect(jsonPath("$[0].importeTotal").value(500.00));
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(buscada.getId()))
+                .andExpect(jsonPath("$.items[0].importeTotal").value(500.00));
     }
 
     @Test
     void filtrosSinCoincidenciasDevuelven200ConArregloVacio() throws Exception {
         tresFechas();
 
-        listar("montoMinimo", "999999999").andExpect(status().isOk()).andExpect(content().json("[]", true));
+        listar("montoMinimo", "999999999").andExpect(status().isOk()).andExpect(content().json("{\"items\":[],\"pagina\":0,\"tamanio\":10,\"totalElementos\":0,\"totalPaginas\":0}", true));
     }
 
     @Test
     void baseSinFacturasDevuelve200ConArregloVacio() throws Exception {
-        listar().andExpect(status().isOk()).andExpect(content().json("[]", true));
+        listar().andExpect(status().isOk()).andExpect(content().json("{\"items\":[],\"pagina\":0,\"tamanio\":10,\"totalElementos\":0,\"totalPaginas\":0}", true));
     }
 
     @Test
     void clienteOpcionalApareceComoConsumidorFinal() throws Exception {
         guardarFactura(1L, DEL_05, 10.00, EstadoFactura.EMITIDA, null);
 
-        listar().andExpect(jsonPath("$[0].clienteDenominacion").value("Consumidor Final"));
+        listar().andExpect(jsonPath("$.items[0].clienteDenominacion").value("Consumidor Final"));
     }
 
     @Test
     void borradorSinNumeroTieneNumeroNulo() throws Exception {
         guardarFactura(null, DEL_05, 10.00, EstadoFactura.BORRADOR, juan);
 
-        listar().andExpect(jsonPath("$[0].numeroFactura").isEmpty())
-                .andExpect(jsonPath("$[0].estado").value("BORRADOR"));
+        listar().andExpect(jsonPath("$.items[0].numeroFactura").isEmpty())
+                .andExpect(jsonPath("$.items[0].estado").value("BORRADOR"));
     }
 
     // --- Detalle ---
@@ -215,6 +215,7 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
                 .andExpect(jsonPath("$.estado").value("EMITIDA"))
                 .andExpect(jsonPath("$.clienteId").value(juan.getId()))
                 .andExpect(jsonPath("$.clienteDenominacion").value("Juan Servicios"))
+                .andExpect(jsonPath("$.clienteCuitCuil").value("20-12345678-9"))
                 .andExpect(jsonPath("$.condicionIvaId").value(responsableInscripto.getId()))
                 .andExpect(jsonPath("$.condicionIva").value("Responsable Inscripto"))
                 .andExpect(jsonPath("$.puntoVentaId").value(casaCentral.getId()))
@@ -252,7 +253,8 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
         mvc.perform(get("/api/facturas/{id}", sinCliente.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.clienteId").isEmpty())
-                .andExpect(jsonPath("$.clienteDenominacion").value("Consumidor Final"));
+                .andExpect(jsonPath("$.clienteDenominacion").value("Consumidor Final"))
+                .andExpect(jsonPath("$.clienteCuitCuil").isEmpty());
     }
 
     @Test
@@ -422,15 +424,15 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
         guardarFactura(3L, DEL_10, 250.00, EstadoFactura.EMITIDA, null);
 
         listar("estado", "EMITIDA").andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].numeroFactura").value(3))
-                .andExpect(jsonPath("$[0].fechaEmision").value("2026-11-10"))
-                .andExpect(jsonPath("$[0].clienteDenominacion").value("Consumidor Final"))
-                .andExpect(jsonPath("$[0].importeTotal").value(250.00))
-                .andExpect(jsonPath("$[1].numeroFactura").value(1))
-                .andExpect(jsonPath("$[1].fechaEmision").value("2026-11-05"))
-                .andExpect(jsonPath("$[1].clienteDenominacion").value("Juan Servicios"))
-                .andExpect(jsonPath("$[1].importeTotal").value(1210.50));
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].numeroFactura").value(3))
+                .andExpect(jsonPath("$.items[0].fechaEmision").value("2026-11-10"))
+                .andExpect(jsonPath("$.items[0].clienteDenominacion").value("Consumidor Final"))
+                .andExpect(jsonPath("$.items[0].importeTotal").value(250.00))
+                .andExpect(jsonPath("$.items[1].numeroFactura").value(1))
+                .andExpect(jsonPath("$.items[1].fechaEmision").value("2026-11-05"))
+                .andExpect(jsonPath("$.items[1].clienteDenominacion").value("Juan Servicios"))
+                .andExpect(jsonPath("$.items[1].importeTotal").value(1210.50));
 
         String[] lineas = texto(reporte("formato", "txt", "estado", "EMITIDA")).split("\n");
         assertThat(lineas).hasSize(3);
@@ -463,8 +465,8 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
     // --- Errores transversales ---
 
     @Test
-    void listadoVacioEs200ConArregloYDetalleInexistenteEs404() throws Exception {
-        mvc.perform(get("/api/facturas")).andExpect(status().isOk()).andExpect(content().json("[]", true));
+    void listadoVacioEs200ConSobreVacioYDetalleInexistenteEs404() throws Exception {
+        mvc.perform(get("/api/facturas")).andExpect(status().isOk()).andExpect(content().json("{\"items\":[],\"pagina\":0,\"tamanio\":10,\"totalElementos\":0,\"totalPaginas\":0}", true));
         mvc.perform(get("/api/facturas/1")).andExpect(status().isNotFound());
     }
 

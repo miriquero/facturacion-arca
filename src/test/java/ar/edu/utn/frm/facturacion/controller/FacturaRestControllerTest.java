@@ -20,6 +20,8 @@ import ar.edu.utn.frm.facturacion.dto.FacturaDetalleDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaFiltrosDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaReporteDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaRequestDTO;
+import ar.edu.utn.frm.facturacion.dto.PaginaDTO;
+import ar.edu.utn.frm.facturacion.dto.SolicitudPagina;
 import ar.edu.utn.frm.facturacion.exception.ImporteNoRepresentableException;
 import ar.edu.utn.frm.facturacion.exception.ParametroInvalidoException;
 import ar.edu.utn.frm.facturacion.exception.RecursoNoEncontradoException;
@@ -79,52 +81,86 @@ class FacturaRestControllerTest {
                 items, estado, "PES");
     }
 
+    private static PaginaDTO<FacturaReporteDTO> pagina(List<FacturaReporteDTO> items) {
+        return PaginaDTO.de(items, SolicitudPagina.de(null, null), items.size());
+    }
+
     @Test
-    void listadoDevuelveLasFilasConLosDiezCamposYConvierteLosParametros() throws Exception {
-        when(servicio.listar(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(
+    void listadoDevuelveElSobreConLasFilasDeLosDiezCamposYConvierteLosParametros() throws Exception {
+        when(servicio.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(PaginaDTO.de(List.of(
                 fila(2, 15L, LocalDate.of(2026, 11, 10), "Juan Servicios", 1210.50, 2, EstadoFactura.EMITIDA),
-                fila(1, null, LocalDate.of(2026, 11, 5), "Consumidor Final", 500.00, 0, EstadoFactura.BORRADOR)));
+                fila(1, null, LocalDate.of(2026, 11, 5), "Consumidor Final", 500.00, 0, EstadoFactura.BORRADOR)),
+                SolicitudPagina.de(1, 2), 5));
 
         mvc.perform(get("/api/facturas")
                         .param("fechaDesde", "2026-11-05").param("fechaHasta", "2026-11-10")
-                        .param("estado", " emitida ").param("montoMinimo", "100.10"))
+                        .param("estado", " emitida ").param("montoMinimo", "100.10")
+                        .param("numero", "15").param("clienteId", "3").param("informada", " TRUE ")
+                        .param("pagina", "1").param("tamanio", "2"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].id").value(2))
-                .andExpect(jsonPath("$[0].numeroFactura").value(15))
-                .andExpect(jsonPath("$[0].fechaEmision").value("2026-11-10"))
-                .andExpect(jsonPath("$[0].clienteDenominacion").value("Juan Servicios"))
-                .andExpect(jsonPath("$[0].condicionIva").value("Responsable Inscripto"))
-                .andExpect(jsonPath("$[0].puntoVentaDescripcion").value("Casa Central"))
-                .andExpect(jsonPath("$[0].importeTotal").value(1210.50))
-                .andExpect(jsonPath("$[0].cantidadItems").value(2))
-                .andExpect(jsonPath("$[0].estado").value("EMITIDA"))
-                .andExpect(jsonPath("$[0].codigoMoneda").value("PES"))
-                .andExpect(jsonPath("$[1].numeroFactura").doesNotExist());
+                .andExpect(jsonPath("$.pagina").value(1))
+                .andExpect(jsonPath("$.tamanio").value(2))
+                .andExpect(jsonPath("$.totalElementos").value(5))
+                .andExpect(jsonPath("$.totalPaginas").value(3))
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].id").value(2))
+                .andExpect(jsonPath("$.items[0].numeroFactura").value(15))
+                .andExpect(jsonPath("$.items[0].fechaEmision").value("2026-11-10"))
+                .andExpect(jsonPath("$.items[0].clienteDenominacion").value("Juan Servicios"))
+                .andExpect(jsonPath("$.items[0].condicionIva").value("Responsable Inscripto"))
+                .andExpect(jsonPath("$.items[0].puntoVentaDescripcion").value("Casa Central"))
+                .andExpect(jsonPath("$.items[0].importeTotal").value(1210.50))
+                .andExpect(jsonPath("$.items[0].cantidadItems").value(2))
+                .andExpect(jsonPath("$.items[0].estado").value("EMITIDA"))
+                .andExpect(jsonPath("$.items[0].codigoMoneda").value("PES"))
+                .andExpect(jsonPath("$.items[1].numeroFactura").doesNotExist());
 
         String cuerpo = mvc.perform(get("/api/facturas")).andReturn().getResponse().getContentAsString();
-        assertThat(new com.fasterxml.jackson.databind.ObjectMapper().readTree(cuerpo).get(0).fieldNames())
+        com.fasterxml.jackson.databind.JsonNode raiz = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(cuerpo);
+        assertThat(raiz.fieldNames()).toIterable()
+                .containsExactlyInAnyOrder("items", "pagina", "tamanio", "totalElementos", "totalPaginas");
+        assertThat(raiz.get("items").get(0).fieldNames())
                 .toIterable().containsExactlyInAnyOrder("id", "numeroFactura", "fechaEmision", "clienteDenominacion",
                         "condicionIva", "puntoVentaDescripcion", "importeTotal", "cantidadItems", "estado", "codigoMoneda");
 
         ArgumentCaptor<FacturaFiltrosDTO> captor = ArgumentCaptor.forClass(FacturaFiltrosDTO.class);
-        verify(servicio, org.mockito.Mockito.atLeastOnce()).listar(captor.capture());
-        assertThat(captor.getAllValues().get(0)).isEqualTo(
-                new FacturaFiltrosDTO(LocalDate.of(2026, 11, 5), LocalDate.of(2026, 11, 10), " emitida ", 100.10));
+        ArgumentCaptor<Integer> paginaCaptor = ArgumentCaptor.forClass(Integer.class);
+        ArgumentCaptor<Integer> tamanioCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(servicio, org.mockito.Mockito.atLeastOnce()).listar(captor.capture(), paginaCaptor.capture(),
+                tamanioCaptor.capture());
+        assertThat(captor.getAllValues().get(0)).isEqualTo(new FacturaFiltrosDTO(LocalDate.of(2026, 11, 5),
+                LocalDate.of(2026, 11, 10), " emitida ", 100.10, 15L, 3L, " TRUE "));
+        assertThat(paginaCaptor.getAllValues().get(0)).isEqualTo(1);
+        assertThat(tamanioCaptor.getAllValues().get(0)).isEqualTo(2);
     }
 
     @Test
-    void baseSinFacturasDevuelve200ConArregloVacio() throws Exception {
-        when(servicio.listar(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+    void baseSinFacturasDevuelve200ConItemsVacio() throws Exception {
+        when(servicio.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(pagina(List.of()));
 
         mvc.perform(get("/api/facturas"))
                 .andExpect(status().isOk())
-                .andExpect(content().json("[]", true));
+                .andExpect(content().json("{\"items\":[],\"pagina\":0,\"tamanio\":10,\"totalElementos\":0,"
+                        + "\"totalPaginas\":0}", true));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"tamanio, diez", "numero, abc", "pagina, uno", "clienteId, x"})
+    void parametroNoEnteroSeTraduceA400QueNombraElParametroSinTocarElServicio(String parametro, String valor)
+            throws Exception {
+        mvc.perform(get("/api/facturas").param(parametro, valor))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("'" + parametro + "'")));
+        verifyNoInteractions(servicio);
     }
 
     @Test
     void parametroInvalidoSeTraduceA400ProblemDetailConMarcaTemporal() throws Exception {
-        when(servicio.listar(org.mockito.ArgumentMatchers.any())).thenThrow(new ParametroInvalidoException(
+        when(servicio.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenThrow(new ParametroInvalidoException(
                 "El estado 'PAGADA' no es válido. Valores admitidos: [BORRADOR, EMITIDA, ANULADA]."));
 
         mvc.perform(get("/api/facturas").param("estado", "PAGADA"))
@@ -159,7 +195,7 @@ class FacturaRestControllerTest {
     @Test
     void detalleDevuelveCabeceraYRenglones() throws Exception {
         when(servicio.obtenerDetalle(7L)).thenReturn(new FacturaDetalladaDTO(7L, 1L, LocalDate.of(2026, 11, 5),
-                "EMITIDA", 3L, "Juan Servicios", 4L, "Responsable Inscripto", 5L, 1, "Casa Central", 6L, "PES",
+                "EMITIDA", 3L, "Juan Servicios", "20-12345678-9", 4L, "Responsable Inscripto", 5L, 1, "Casa Central", 6L, "PES",
                 7260.00, 0.0, 7260.00, "70000000000001", LocalDate.of(2026, 11, 15), "A", null,
                 "Entrega en mostrador", List.of(
                         new FacturaDetalleDTO(11L, 21L, "ART-001", "Martillo", 1, 3000.00, 0, 3000.00, 630.00, 3630.00),
@@ -173,6 +209,7 @@ class FacturaRestControllerTest {
                 .andExpect(jsonPath("$.estado").value("EMITIDA"))
                 .andExpect(jsonPath("$.clienteId").value(3))
                 .andExpect(jsonPath("$.clienteDenominacion").value("Juan Servicios"))
+                .andExpect(jsonPath("$.clienteCuitCuil").value("20-12345678-9"))
                 .andExpect(jsonPath("$.condicionIvaId").value(4))
                 .andExpect(jsonPath("$.condicionIva").value("Responsable Inscripto"))
                 .andExpect(jsonPath("$.puntoVentaId").value(5))
@@ -243,6 +280,62 @@ class FacturaRestControllerTest {
         assertThat(captor.getValue()).isEqualTo(new FacturaFiltrosDTO(null, null, "EMITIDA", null));
     }
 
+    // --- PDF de una factura: GET /api/facturas/{id}/pdf (etapa 6) ---
+
+    @Test
+    void pdfDeUnaFacturaSeDescargaComoAdjuntoConElNombreDelComprobante() throws Exception {
+        when(servicio.generarComprobante(7L)).thenReturn(new ArchivoReporte("factura-0001-00000004.pdf",
+                MediaType.APPLICATION_PDF, new byte[] {'%', 'P', 'D', 'F'}));
+
+        mvc.perform(get("/api/facturas/7/pdf"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andExpect(header().string("Content-Disposition",
+                        "attachment; filename=\"factura-0001-00000004.pdf\""))
+                .andExpect(content().bytes(new byte[] {'%', 'P', 'D', 'F'}));
+    }
+
+    @Test
+    void pdfDeUnBorradorEs409SinContentDisposition() throws Exception {
+        when(servicio.generarComprobante(8L)).thenThrow(new ReglaNegocioException(
+                "La factura 8 está en BORRADOR: no fue informada a ARCA; emitila para imprimirla"));
+
+        mvc.perform(get("/api/facturas/8/pdf"))
+                .andExpect(status().isConflict())
+                .andExpect(header().doesNotExist("Content-Disposition"))
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.containsString("BORRADOR"),
+                        org.hamcrest.Matchers.containsString("no fue informada a ARCA"))));
+    }
+
+    @Test
+    void pdfDeUnaFacturaInexistenteEs404ConElId() throws Exception {
+        when(servicio.generarComprobante(999999L)).thenThrow(new RecursoNoEncontradoException("Factura", 999999L));
+
+        mvc.perform(get("/api/facturas/999999/pdf"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("999999")));
+    }
+
+    @Test
+    void pdfConIdNoNumericoEs400QueNombraElIdSinTocarElServicio() throws Exception {
+        mvc.perform(get("/api/facturas/abc/pdf"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("'id'")));
+        verifyNoInteractions(servicio);
+    }
+
+    @Test
+    void pdfConGlifoNoSoportadoEs400ConElCodigoUnicodeYSinDescarga() throws Exception {
+        when(servicio.generarComprobante(7L)).thenThrow(new GlifoNoSoportadoException(0xE000, "cliente"));
+
+        mvc.perform(get("/api/facturas/7/pdf"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().doesNotExist("Content-Disposition"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("U+E000")));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"", "SIN_PARAMETRO"})
     void sinFormatoOConFormatoVacioElServicioRecibePdf(String formato) throws Exception {
@@ -290,7 +383,7 @@ class FacturaRestControllerTest {
 
     @Test
     void errorInesperadoEs500ConDetalleGenericoSinFiltrarElMensajeInterno() throws Exception {
-        when(servicio.listar(org.mockito.ArgumentMatchers.any()))
+        when(servicio.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenThrow(new RuntimeException("SQL interno secreto"));
 
         String cuerpo = mvc.perform(get("/api/facturas"))
@@ -326,9 +419,9 @@ class FacturaRestControllerTest {
         Usuario acortez = DatosDePrueba.usuario("acortez");
         when(usuarios.findByUsuario("acortez")).thenReturn(Optional.of(acortez));
         AtomicReference<Usuario> visto = new AtomicReference<>();
-        when(servicio.listar(org.mockito.ArgumentMatchers.any())).thenAnswer(invocacion -> {
+        when(servicio.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenAnswer(invocacion -> {
             visto.set(UsuarioActual.get());
-            return List.of();
+            return pagina(List.of());
         });
 
         mvc.perform(get("/api/facturas").header("X-Usuario", "acortez")).andExpect(status().isOk());
@@ -340,7 +433,7 @@ class FacturaRestControllerTest {
     @Test
     void elContextoQuedaVacioTambienCuandoLaPeticionTerminaEnError() throws Exception {
         when(usuarios.findByUsuario("acortez")).thenReturn(Optional.of(DatosDePrueba.usuario("acortez")));
-        when(servicio.listar(org.mockito.ArgumentMatchers.any())).thenThrow(new RuntimeException("falla interna"));
+        when(servicio.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenThrow(new RuntimeException("falla interna"));
 
         mvc.perform(get("/api/facturas").header("X-Usuario", "acortez"))
                 .andExpect(status().isInternalServerError());

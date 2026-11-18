@@ -1,6 +1,7 @@
 package ar.edu.utn.frm.facturacion.service;
 
 import ar.edu.utn.frm.facturacion.dto.OpcionDTO;
+import ar.edu.utn.frm.facturacion.model.Cliente;
 import ar.edu.utn.frm.facturacion.repository.ClienteRepository;
 import ar.edu.utn.frm.facturacion.repository.CondicionIvaRepository;
 import ar.edu.utn.frm.facturacion.repository.ListaPrecioArticuloRepository;
@@ -44,9 +45,21 @@ public class CatalogoService {
 
     /** Etiqueta: denominación y, entre paréntesis, el CUIT/CUIL. */
     public List<OpcionDTO> clientes() {
-        return clienteRepository.findAll(POR_ID).stream()
-                .map(c -> new OpcionDTO(c.getId(), c.getDenominacion() + " (" + c.getCuitCuil() + ")", null, null))
+        return clientes(null);
+    }
+
+    /** Búsqueda por texto en la denominación o el CUIT/CUIL; sin texto devuelve el catálogo completo. */
+    public List<OpcionDTO> clientes(String q) {
+        return PatronBusqueda.de(q)
+                .map(clienteRepository::buscar)
+                .orElseGet(() -> clienteRepository.findAll(POR_ID))
+                .stream()
+                .map(CatalogoService::aOpcion)
                 .toList();
+    }
+
+    private static OpcionDTO aOpcion(Cliente c) {
+        return new OpcionDTO(c.getId(), c.getDenominacion() + " (" + c.getCuitCuil() + ")", null, null);
     }
 
     public List<OpcionDTO> condicionesIva() {
@@ -67,7 +80,14 @@ public class CatalogoService {
      * renglón de una factura) y {@code valor} su precio de venta.
      */
     public List<OpcionDTO> listaPrecioArticulos() {
-        return listaPrecioArticuloRepository.findAllConArticuloYLista().stream()
+        return listaPrecioArticulos(null);
+    }
+
+    /** Búsqueda por código o denominación del artículo o por código de lista; sin texto, todas las ofertas. */
+    public List<OpcionDTO> listaPrecioArticulos(String q) {
+        return PatronBusqueda.de(q)
+                .map(listaPrecioArticuloRepository::buscarConArticuloYLista)
+                .orElseGet(listaPrecioArticuloRepository::findAllConArticuloYLista).stream()
                 .map(o -> new OpcionDTO(o.getId(), o.getArticulo().getCodigo() + " - "
                         + o.getArticulo().getDenominacion() + " (" + o.getListaPrecio().getCodigo() + ")",
                         o.getPrecioVenta(), null))

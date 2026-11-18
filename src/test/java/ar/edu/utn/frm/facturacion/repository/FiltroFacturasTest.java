@@ -107,4 +107,57 @@ class FiltroFacturasTest {
         assertThat(FiltroFacturas.desde(new FacturaFiltrosDTO(null, null, null, null)))
                 .isEqualTo(FiltroFacturas.SIN_FILTROS);
     }
+
+    private static FacturaFiltrosDTO conInformada(String informada) {
+        return new FacturaFiltrosDTO(null, null, null, null, null, null, informada);
+    }
+
+    private static FacturaFiltrosDTO conNumero(Long numero) {
+        return new FacturaFiltrosDTO(null, null, null, null, numero, null, null);
+    }
+
+    @Test
+    void informadaFalsaConEspaciosYMayusculasSeNormaliza() {
+        assertThat(FiltroFacturas.desde(conInformada(" FALSE ")).informada()).isFalse();
+    }
+
+    @Test
+    void informadaVerdaderaSeNormaliza() {
+        assertThat(FiltroFacturas.desde(conInformada("true")).informada()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "  ", "\t"})
+    void informadaVaciaOSoloEspaciosEsAusente(String informada) {
+        assertThat(FiltroFacturas.desde(conInformada(informada)).informada()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"si", "yes", "1", "on"})
+    void informadaDistintaDeTrueOFalseSeRechazaNombrandoElParametroYLosAdmitidos(String informada) {
+        assertThatThrownBy(() -> FiltroFacturas.desde(conInformada(informada)))
+                .isInstanceOf(ParametroInvalidoException.class)
+                .hasMessageContaining("informada")
+                .hasMessageContaining("true")
+                .hasMessageContaining("false");
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, -3})
+    void numeroMenorQueUnoSeRechazaNombrandoElParametro(long numero) {
+        assertThatThrownBy(() -> FiltroFacturas.desde(conNumero(numero)))
+                .isInstanceOf(ParametroInvalidoException.class)
+                .hasMessageContaining("numero");
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {1, 987654})
+    void numeroDesdeUnoSeConserva(long numero) {
+        assertThat(FiltroFacturas.desde(conNumero(numero)).numero()).isEqualTo(numero);
+    }
+
+    @Test
+    void numeroNuloEsAusente() {
+        assertThat(FiltroFacturas.desde(conNumero(null)).numero()).isNull();
+    }
 }

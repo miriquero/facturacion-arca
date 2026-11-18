@@ -26,6 +26,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @TestPropertySource(properties = "facturacion.cors.allowed-origins=http://localhost:4200")
 class CorsConfigPropiedadTest {
 
+    private static final ar.edu.utn.frm.facturacion.dto.PaginaDTO<ar.edu.utn.frm.facturacion.dto.FacturaReporteDTO> PAGINA_VACIA =
+            ar.edu.utn.frm.facturacion.dto.PaginaDTO.de(List.of(), ar.edu.utn.frm.facturacion.dto.SolicitudPagina.de(null, null), 0);
+
     @TestConfiguration
     static class RelojFijo {
         @Bean
@@ -45,7 +48,8 @@ class CorsConfigPropiedadTest {
 
     @Test
     void conLaPropiedadSobrescritaSeAdmiteElNuevoOrigenYSeRechazaElAnterior() throws Exception {
-        when(facturaService.listar(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(facturaService.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(PAGINA_VACIA);
 
         mvc.perform(get("/api/facturas").header("Origin", "http://localhost:4200"))
                 .andExpect(status().isOk())

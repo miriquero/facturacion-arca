@@ -150,7 +150,7 @@ class FacturaEscrituraIntegracionTest extends IntegracionApiBase {
                         .get("/api/facturas"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
-        var filas = JSON.readTree(listado);
+        var filas = JSON.readTree(listado).get("items");
 
         org.assertj.core.api.Assertions.assertThat(filas).hasSize(1);
         org.assertj.core.api.Assertions.assertThat(filas.get(0)).isEqualTo(creada);
@@ -465,6 +465,33 @@ class FacturaEscrituraIntegracionTest extends IntegracionApiBase {
     }
 
     @Test
+    void editarUnaFacturaAnuladaEs409ConservaNumeroCaeYFechaDeAnulacion() throws Exception {
+        comoSistema();
+        var factura = armarFactura(7L, java.time.LocalDate.of(2026, 11, 1), 3630.0,
+                ar.edu.utn.frm.facturacion.model.EstadoFactura.ANULADA, juan,
+                renglon(precioMartillo, "Martillo", 1, 3000, 3000, 630, 3630));
+        factura.setCae("70000000000007");
+        factura.setCaeFechaVencimiento(java.time.LocalDate.of(2026, 11, 11));
+        factura.setResultadoAfip("A");
+        factura.setFechaAnulacion(java.time.LocalDate.of(2026, 11, 12));
+        var anulada = facturaRepositorio.save(factura);
+        var antes = detalleDe(anulada.getId());
+
+        intentarPoner(anulada.getId(), cuerpo(juan.getId(), renglonJson(precioCable.getId(), "5")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.containsString("ANULADA"),
+                        org.hamcrest.Matchers.containsString("BORRADOR"))));
+
+        var despues = detalleDe(anulada.getId());
+        org.assertj.core.api.Assertions.assertThat(despues).isEqualTo(antes);
+        org.assertj.core.api.Assertions.assertThat(despues.get("numero").asLong()).isEqualTo(7L);
+        org.assertj.core.api.Assertions.assertThat(despues.get("cae").asText()).isEqualTo("70000000000007");
+        org.assertj.core.api.Assertions.assertThat(despues.get("fechaAnulacion").asText()).isEqualTo("2026-11-12");
+        org.assertj.core.api.Assertions.assertThat(despues.get("detalles")).hasSize(1);
+    }
+
+    @Test
     void editarUnaFacturaInexistenteEs404() throws Exception {
         intentarPoner(999999L, cuerpo(juan.getId(), renglonJson(precioMartillo.getId(), "1")))
                 .andExpect(status().isNotFound())
@@ -617,6 +644,30 @@ class FacturaEscrituraIntegracionTest extends IntegracionApiBase {
     }
 
     @Test
+    void borrarUnaFacturaEmitidaEs409YSigueConNumeroYCae() throws Exception {
+        comoSistema();
+        var factura = armarFactura(3L, java.time.LocalDate.of(2026, 11, 1), 3630.0,
+                ar.edu.utn.frm.facturacion.model.EstadoFactura.EMITIDA, juan,
+                renglon(precioMartillo, "Martillo", 1, 3000, 3000, 630, 3630));
+        factura.setCae("70000000000003");
+        var emitida = facturaRepositorio.save(factura);
+        var antes = detalleDe(emitida.getId());
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/facturas/" + emitida.getId()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.containsString("EMITIDA"),
+                        org.hamcrest.Matchers.containsString("eliminar"))));
+
+        var despues = detalleDe(emitida.getId());
+        org.assertj.core.api.Assertions.assertThat(despues).isEqualTo(antes);
+        org.assertj.core.api.Assertions.assertThat(despues.get("numero").asLong()).isEqualTo(3L);
+        org.assertj.core.api.Assertions.assertThat(despues.get("cae").asText()).isEqualTo("70000000000003");
+        org.assertj.core.api.Assertions.assertThat(contarRenglones()).isEqualTo(1);
+    }
+
+    @Test
     void borrarUnaFacturaInexistenteEs404() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/facturas/999999"))
                 .andExpect(status().isNotFound())
@@ -755,8 +806,8 @@ class FacturaEscrituraIntegracionTest extends IntegracionApiBase {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .get("/api/facturas").param("estado", "ANULADA"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].id").value(id));
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(id));
     }
 
     @org.junit.jupiter.params.ParameterizedTest(name = "{0} -> {1} prohibida")
