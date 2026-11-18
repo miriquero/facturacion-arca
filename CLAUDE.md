@@ -70,7 +70,7 @@ Cargá la skill correspondiente al contexto ANTES de escribir código. Las skill
 
 El plan completo está en [CHANGES.md](CHANGES.md). Resumen:
 
-- **Total**: 6 changes en 4 fases, uno por etapa de la consigna, estrictamente secuenciales.
+- **Total**: 7 changes: 6 por las etapas de la consigna, estrictamente secuenciales, más `C-07` (`etapa-6-requisitos-docente`) por los requisitos verbales del docente.
 - **Camino crítico** (6): `C-01 → C-02 → C-03 → C-04 → C-05 → C-06`.
 - **Primer change**: `C-01` (`etapa-0-puesta-en-marcha`).
 - **Mayor peso y riesgo**: `C-05` (`etapa-4-escritura-estados-concurrencia`, 25 %).
@@ -89,7 +89,7 @@ El plan completo está en [CHANGES.md](CHANGES.md). Resumen:
 - NUNCA devolver entidades JPA en respuestas HTTP → usar DTOs construidos dentro del servicio (`open-in-view: false`).
 - NUNCA usar `@Data` en entidades ni incluir asociaciones bidireccionales en `toString`/`equals`/`hashCode` → `@Getter`/`@Setter` y exclusiones explícitas.
 - NUNCA calcular importes con `double` ni `Math.round` → `BigDecimal` con `HALF_UP` a 2 decimales y control de ida y vuelta antes de guardar en los campos `double`.
-- NUNCA agregar login, cobros, paginación, CRUD de catálogos, conversión de monedas ni integración fiscal real → están fuera del alcance de la consigna.
+- NUNCA agregar login, cobros, CRUD de catálogos, conversión de monedas ni integración fiscal real (ARCA sigue simulada) → están fuera del alcance de la consigna. **Excepción desde 2026-11-18**: la paginación del listado de facturas, los filtros por número, cliente e informada, los explorador modales y el PDF por factura los pidió el docente en clase para aprobar (ver C-07 en `CHANGES.md`).
 
 **Frontend** (lo que fija la consigna)
 - NUNCA agregar React, Vue u otro framework o bundler → HTML, CSS y TypeScript con módulos ES2020.

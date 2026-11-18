@@ -238,6 +238,23 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
 
 ---
 
+## FASE 5 — Requisitos verbales del docente (2026-11-18, fuera de la consigna escrita)
+
+### [C-07] `etapa-6-requisitos-docente`
+- **Estado**: `[x]` archivado 2026-11-18 (620 pruebas de backend y 244 de frontend en verde; recorrido en navegador real; revisión de accesibilidad a cargo del estudiante; tag, ARCA simulada y tamaño de página pendientes de confirmar con el docente)
+- **Origen**: el docente indicó en clase, como condición para aprobar (fotos compartidas el 2026-11-18; transcripción en `docs/consigna/requisitos-docente-2026-11-18.md`), que el CRUD de factura de venta con alta y edición debía incluir lo siguiente. Esto **amplía la consigna escrita**, que declaraba fuera de alcance la paginación; la regla dura correspondiente de `CLAUDE.md` y `AGENTS.md` se actualizó. La conexión con ARCA/AFIP sigue **simulada** (CAE ficticio): una conexión real exigiría CUIT, certificado y credenciales de homologación y contradice la consigna; confirmar con el docente.
+- **Scope** (diferencias detectadas entre el pedido y lo entregado en `etapa-5`):
+  - Filtros de búsqueda del listado: número de factura, fecha desde/hasta (ya existe), cliente, e «informada a ARCA» sí/no (informada = tiene CAE: emitidas y anuladas). Los mismos filtros alimentan los reportes.
+  - Paginación de la grilla de facturas en el servidor (página y tamaño, con total) y controles de paginación en el frontend; los reportes siguen exportando todo lo filtrado.
+  - «Buscar Cliente» y «Buscar ListaPrecioArticulo» como interfaces tipo explorador en ventanas modales accesibles (hoy son listas desplegables).
+  - Una factura informada no se modifica ni se elimina, solo se anula (ya implementado: 409 en backend y acciones por estado en frontend; agregar pruebas que lo demuestren desde el nuevo flujo).
+  - Imprimir el PDF de **una** factura con CAE («CAI» en la pizarra) y fecha de vencimiento (hoy solo existe el PDF de listado, sin CAE).
+- **Dependencias**: `C-06`
+- **Governance**: MEDIO (cambia el contrato del listado de la etapa 3 y del frontend de la etapa 5)
+- **Tag**: a definir con el docente (la consigna dice que se evalúa la versión del tag entregado).
+
+---
+
 ## Resumen
 
 | ID | Change | Etapa | Peso | Dependencias | Governance | Tag |
@@ -248,5 +265,6 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
 | C-04 | `etapa-3-api-rest-lectura` | 3 | 15 % | C-03 | MEDIO | `etapa-3` |
 | C-05 | `etapa-4-escritura-estados-concurrencia` | 4 | 25 % | C-04 | MEDIO | `etapa-4` |
 | C-06 | `etapa-5-frontend-typescript` | 5 | 20 % | C-05 | MEDIO | `etapa-5` |
+| C-07 | `etapa-6-requisitos-docente` | — | a definir | C-06 | MEDIO | a definir |
 
 Primer change recomendado: `C-01` (`etapa-0-puesta-en-marcha`). Arrancar con `/opsx:propose etapa-0-puesta-en-marcha`.
