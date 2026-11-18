@@ -40,7 +40,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Carga de datos de ejemplo: usuarios, catálogos, clientes y seis facturas creadas con {@code FacturaService}
+ * Carga de datos de ejemplo: usuarios, catálogos, clientes y facturas creadas con {@code FacturaService}
  * (etapa 4, DD-11), de modo que importes, numeración, CAE y baja lógica siguen las reglas reales de la API.
  * Todo ocurre en una transacción y con el usuario {@code sistema} en el contexto de auditoría, que se limpia al terminar.
  * Se omite con el perfil {@code test} y si la base ya tiene usuarios (no repara cargas parciales).
@@ -111,10 +111,11 @@ public class DataLoader implements CommandLineRunner {
         }
     }
 
-    /** Catálogos y clientes que las facturas necesitan referenciar. */
+    /** Catálogos que las facturas necesitan referenciar. */
     private record Base(PuntoVenta pv1, PuntoVenta pv2, CondicionIva condicion, TipoMoneda pesos,
             TipoMoneda dolares, ListaPrecioArticulo martillo, ListaPrecioArticulo televisor,
-            ListaPrecioArticulo cable) {
+            ListaPrecioArticulo cable, ListaPrecioArticulo taladro, ListaPrecioArticulo cinta,
+            ListaPrecioArticulo teclado, ListaPrecioArticulo mouse) {
     }
 
     private Base cargarCatalogos() {
@@ -133,12 +134,21 @@ public class DataLoader implements CommandLineRunner {
         Articulo martillo = articuloRepository.save(articulo("ART-001", "Martillo", ferreteria, acme));
         Articulo televisor = articuloRepository.save(articulo("ART-002", "Televisor", electronica, tecnoSur));
         Articulo cable = articuloRepository.save(articulo("ART-003", "Cable HDMI", electronica, null));
+        Articulo taladro = articuloRepository.save(articulo("ART-004", "Taladro eléctrico", ferreteria, acme));
+        Articulo cinta = articuloRepository.save(articulo("ART-005", "Cinta métrica", ferreteria, acme));
+        Articulo teclado = articuloRepository.save(articulo("ART-006", "Teclado USB", electronica, tecnoSur));
+        Articulo mouse = articuloRepository.save(articulo("ART-007", "Mouse inalámbrico", electronica, tecnoSur));
 
         ListaPrecio general = listaPrecioRepository.save(listaPrecio("GENERAL", "Lista general"));
         ListaPrecioArticulo precioMartillo = listaPrecioArticuloRepository.save(precio(general, martillo, 3000));
         ListaPrecioArticulo precioTelevisor = listaPrecioArticuloRepository.save(precio(general, televisor, 60000));
         ListaPrecioArticulo precioCable = listaPrecioArticuloRepository.save(precio(general, cable, 8000));
-        return new Base(pv1, pv2, consumidorFinal, pesos, dolares, precioMartillo, precioTelevisor, precioCable);
+        ListaPrecioArticulo precioTaladro = listaPrecioArticuloRepository.save(precio(general, taladro, 45000));
+        ListaPrecioArticulo precioCinta = listaPrecioArticuloRepository.save(precio(general, cinta, 5500));
+        ListaPrecioArticulo precioTeclado = listaPrecioArticuloRepository.save(precio(general, teclado, 18000));
+        ListaPrecioArticulo precioMouse = listaPrecioArticuloRepository.save(precio(general, mouse, 12500));
+        return new Base(pv1, pv2, consumidorFinal, pesos, dolares, precioMartillo, precioTelevisor, precioCable,
+                precioTaladro, precioCinta, precioTeclado, precioMouse);
     }
 
     private Cliente[] cargarClientes() {
@@ -149,11 +159,8 @@ public class DataLoader implements CommandLineRunner {
     }
 
     /**
-     * Seis facturas de ejemplo creadas y cambiadas de estado con {@link FacturaService} (DD-11): cálculo de
-     * importes, numeración por punto de venta, CAE, fechas y baja lógica siguen las reglas reales de la API. Las
-     * emisiones van en este orden para reproducir la numeración: PV 1 emite F1, F2 y F3 (1, 2 y 3) y anula la F3;
-     * PV 2 emite la F4 (1); la F5 y la F6 quedan en BORRADOR. Los métodos del servicio se unen a la transacción
-     * del loader: toda la carga sigue siendo atómica.
+     * Crea y cambia el estado de las facturas de ejemplo con {@link FacturaService}.
+     * Toda la carga comparte la transacción del loader.
      */
     private void cargarFacturas(Base b, Cliente juan, Cliente maria) {
         // F1: PV 1, Juan, 2 martillos -> EMITIDA nº 1 (importe 7260)
@@ -170,6 +177,34 @@ public class DataLoader implements CommandLineRunner {
                 renglon(b.cable(), "Cable HDMI", "2"));
         // F6: BORRADOR sin cliente: 1 televisor (72600)
         crear(b, b.pv2(), null, b.pesos(), 1, renglon(b.televisor(), "Televisor", "1"));
+
+        emitir(crear(b, b.pv1(), juan, b.pesos(), 19,
+                renglon(b.taladro(), "Taladro eléctrico", "1"), renglon(b.cinta(), "Cinta métrica", "2")));
+        emitir(crear(b, b.pv2(), maria, b.pesos(), 17,
+                renglon(b.teclado(), "Teclado USB", "3"), renglon(b.mouse(), "Mouse inalámbrico", "3")));
+        emitir(crear(b, b.pv1(), null, b.pesos(), 16,
+                renglon(b.cinta(), "Cinta métrica", "1"), renglon(b.martillo(), "Martillo", "2")));
+        emitir(crear(b, b.pv2(), maria, b.pesos(), 14,
+                renglon(b.televisor(), "Televisor", "2"), renglon(b.cable(), "Cable HDMI", "4")));
+        emitir(crear(b, b.pv1(), juan, b.pesos(), 12,
+                renglon(b.taladro(), "Taladro eléctrico", "2"), renglon(b.martillo(), "Martillo", "3")));
+        emitir(crear(b, b.pv2(), null, b.pesos(), 10,
+                renglon(b.mouse(), "Mouse inalámbrico", "1"), renglon(b.cable(), "Cable HDMI", "1")));
+        emitir(crear(b, b.pv1(), maria, b.pesos(), 8,
+                renglon(b.teclado(), "Teclado USB", "2"), renglon(b.mouse(), "Mouse inalámbrico", "2")));
+        emitir(crear(b, b.pv2(), juan, b.pesos(), 6,
+                renglon(b.cinta(), "Cinta métrica", "3"), renglon(b.taladro(), "Taladro eléctrico", "1")));
+        emitir(crear(b, b.pv1(), maria, b.pesos(), 4,
+                renglon(b.televisor(), "Televisor", "1"), renglon(b.teclado(), "Teclado USB", "1"),
+                renglon(b.cable(), "Cable HDMI", "2")));
+        Long duplicada = emitir(crear(b, b.pv2(), maria, b.pesos(), 3,
+                renglon(b.teclado(), "Teclado USB", "1"), renglon(b.mouse(), "Mouse inalámbrico", "1")));
+        facturaService.cambiarEstado(duplicada, new CambioEstadoRequestDTO("ANULADA", "Anulada por carga duplicada"));
+        crear(b, b.pv1(), juan, b.pesos(), 2,
+                renglon(b.taladro(), "Taladro eléctrico", "1"), renglon(b.cinta(), "Cinta métrica", "2"),
+                renglon(b.martillo(), "Martillo", "1"));
+        crear(b, b.pv2(), null, b.pesos(), 0,
+                renglon(b.teclado(), "Teclado USB", "1"), renglon(b.mouse(), "Mouse inalámbrico", "1"));
     }
 
     private Long crear(Base b, PuntoVenta puntoVenta, Cliente cliente, TipoMoneda moneda, int diasAtras,

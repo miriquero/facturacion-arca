@@ -1,5 +1,0 @@
-Número	Fecha	Cliente	Condición IVA	Punto de venta	Ítems	Total	Estado	Moneda
-5	2026-11-13	Juan Servicios	Consumidor Final	Casa Central	2	22990.00	EMITIDA	PES
-1	2026-10-29	Juan Servicios	Consumidor Final	Sucursal Norte	1	9680.00	EMITIDA	DOL
-2	2026-10-09	Consumidor Final	Consumidor Final	Casa Central	1	72600.00	EMITIDA	PES
-1	2026-09-19	Juan Servicios	Consumidor Final	Casa Central	1	7260.00	EMITIDA	PES

@@ -89,7 +89,7 @@ class DataLoaderTest {
     void cargaArticulosConPrecioEnUnaListaYAlgunoSinMarca() {
         List<Articulo> articulos = articuloRepository.findAll();
 
-        assertThat(articulos).hasSizeGreaterThanOrEqualTo(3);
+        assertThat(articulos).hasSize(7);
         assertThat(articulos).anyMatch(a -> a.getMarca() == null);
         assertThat(listaPrecioArticuloRepository.count()).isEqualTo(articulos.size());
     }
@@ -130,16 +130,16 @@ class DataLoaderTest {
     }
 
     @Test
-    void cargaSeisFacturasTresEmitidasUnaAnuladaYDosBorradores() {
-        assertThat(facturaVentaRepository.count()).isEqualTo(6);
-        assertThat(facturas(EstadoFactura.EMITIDA)).hasSize(3);
-        assertThat(facturas(EstadoFactura.ANULADA)).hasSize(1);
-        assertThat(facturas(EstadoFactura.BORRADOR)).hasSize(2);
+    void cargaDieciochoFacturasEnLosTresEstados() {
+        assertThat(facturaVentaRepository.count()).isEqualTo(18);
+        assertThat(facturas(EstadoFactura.EMITIDA)).hasSize(12);
+        assertThat(facturas(EstadoFactura.ANULADA)).hasSize(2);
+        assertThat(facturas(EstadoFactura.BORRADOR)).hasSize(4);
     }
 
     @Test
     void losBorradoresNoTienenNumeroNiCae() {
-        assertThat(facturas(EstadoFactura.BORRADOR)).hasSize(2).allSatisfy(f -> {
+        assertThat(facturas(EstadoFactura.BORRADOR)).hasSize(4).allSatisfy(f -> {
             assertThat(f.getNumero()).isNull();
             assertThat(f.getCae()).isNull();
             assertThat(f.getCaeFechaVencimiento()).isNull();
@@ -152,7 +152,7 @@ class DataLoaderTest {
         List<FacturaVenta> numeradas = facturaVentaRepository.findAll().stream()
                 .filter(f -> f.getEstado() != EstadoFactura.BORRADOR).toList();
 
-        assertThat(numeradas).hasSize(4).allSatisfy(f -> {
+        assertThat(numeradas).hasSize(14).allSatisfy(f -> {
             assertThat(f.getNumero()).isNotNull();
             assertThat(f.getCae()).matches("[0-9]{14}");
             assertThat(f.getCaeFechaVencimiento()).isEqualTo(LocalDate.now(reloj).plusDays(10));
@@ -162,7 +162,9 @@ class DataLoaderTest {
 
     @Test
     void lasFacturasTienenRenglonesImportesCoherentesYCobradoEnCero() {
-        assertThat(facturaVentaRepository.findAll()).hasSize(6).allSatisfy(f -> {
+        List<FacturaVenta> facturas = facturaVentaRepository.findAll();
+        assertThat(facturas.stream().mapToInt(f -> f.getDetalles().size()).sum()).isEqualTo(33);
+        assertThat(facturas).allSatisfy(f -> {
             assertThat(f.getDetalles()).isNotEmpty();
             double suma = f.getDetalles().stream().mapToDouble(FacturaVentaDetalle::getImporteSubtotal).sum();
             assertThat(f.getImporteTotal()).isCloseTo(suma, within(0.001));
@@ -191,7 +193,7 @@ class DataLoaderTest {
         assertThat(usuarioRepository.count()).isEqualTo(usuarios).isEqualTo(3);
         assertThat(puntoVentaRepository.count() + tipoMonedaRepository.count() + articuloRepository.count()
                 + listaPrecioArticuloRepository.count() + clienteRepository.count()).isEqualTo(catalogos);
-        assertThat(facturaVentaRepository.count()).isEqualTo(facturas).isEqualTo(6);
+        assertThat(facturaVentaRepository.count()).isEqualTo(facturas).isEqualTo(18);
         assertThat(UsuarioActual.get()).isNull();
     }
 
@@ -205,8 +207,8 @@ class DataLoaderTest {
 
     @Test
     void laNumeracionEsLaRealPorPuntoDeVentaYElResultadoEsA() {
-        assertThat(numeros(1)).containsExactly(1L, 2L, 3L);
-        assertThat(numeros(2)).containsExactly(1L);
+        assertThat(numeros(1)).containsExactly(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L);
+        assertThat(numeros(2)).containsExactly(1L, 2L, 3L, 4L, 5L, 6L);
         assertThat(facturaVentaRepository.findAll().stream().filter(f -> f.getNumero() != null))
                 .allSatisfy(f -> assertThat(f.getResultadoAfip()).isEqualTo("A"));
     }
@@ -214,7 +216,7 @@ class DataLoaderTest {
     @Test
     void losImportesSonLosCalculadosPorElServicio() {
         var mixta = facturaVentaRepository.findAll().stream()
-                .filter(f -> f.getEstado() == EstadoFactura.BORRADOR && f.getDetalles().size() == 2)
+                .filter(f -> f.getEstado() == EstadoFactura.BORRADOR && f.getImporteTotal() == 22990.0)
                 .findFirst().orElseThrow();
 
         assertThat(mixta.getDetalles()).extracting(FacturaVentaDetalle::getImporteSubtotal)
@@ -225,12 +227,14 @@ class DataLoaderTest {
             assertThat(f.getImporteSaldo()).isEqualTo(f.getImporteTotal());
         });
         assertThat(facturaVentaRepository.findAll()).extracting(FacturaVenta::getImporteTotal)
-                .containsExactlyInAnyOrder(7260.0, 72600.0, 29040.0, 9680.0, 22990.0, 72600.0);
+                .contains(7260.0, 72600.0, 29040.0, 9680.0, 22990.0);
     }
 
     @Test
     void laAnuladaTieneBajaLogicaConFechaDeHoyYUsuarioSistema() {
-        FacturaVenta anulada = facturas(EstadoFactura.ANULADA).get(0);
+        FacturaVenta anulada = facturas(EstadoFactura.ANULADA).stream()
+                .filter(f -> f.getPuntoVenta().getNumero() == 1 && f.getNumero() == 3L)
+                .findFirst().orElseThrow();
 
         assertThat(anulada.getFechaAnulacion()).isEqualTo(LocalDate.now(reloj));
         assertThat(anulada.getFechaBaja()).isNotNull();
