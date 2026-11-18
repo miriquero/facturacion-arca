@@ -1,9 +1,12 @@
 package ar.edu.utn.frm.facturacion.exception;
 
 import ar.edu.utn.frm.facturacion.report.GlifoNoSoportadoException;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Map;
+import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.TypeMismatchException;
@@ -12,6 +15,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
@@ -42,6 +48,18 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(RecursoNoEncontradoException.class)
     ResponseEntity<Object> noEncontrado(RecursoNoEncontradoException ex, WebRequest request) {
         return respuesta(ex, HttpStatus.NOT_FOUND, "Recurso no encontrado", ex.getMessage(), request);
+    }
+
+    /** Operación incompatible con el estado actual de la factura u otra regla de negocio: 409 Conflict. */
+    @ExceptionHandler(ReglaNegocioException.class)
+    ResponseEntity<Object> reglaDeNegocio(ReglaNegocioException ex, WebRequest request) {
+        return respuesta(ex, HttpStatus.CONFLICT, "Conflicto con el estado de la factura", ex.getMessage(), request);
+    }
+
+    /** Un importe no entra sin pérdida en un campo {@code double}: conflicto de negocio, nada se guarda. */
+    @ExceptionHandler(ImporteNoRepresentableException.class)
+    ResponseEntity<Object> importeNoRepresentable(ImporteNoRepresentableException ex, WebRequest request) {
+        return respuesta(ex, HttpStatus.CONFLICT, "Importe no representable", ex.getMessage(), request);
     }
 
     /** Decisión D9: el problema está en los datos pedidos en PDF, no en el servidor; ver IN-03 (pendiente). */
@@ -100,5 +118,53 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             return "número";
         }
         return tipo.getSimpleName();
+    }
+
+    /**
+     * Bean Validation fallida: 400 con la propiedad {@code errores} (ruta del campo, p. ej.
+     * {@code detalles[0].cantidad}, a mensaje). Si un campo tiene varios errores se unen con {@code "; "}.
+     */
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
+            HttpHeaders encabezados, HttpStatusCode estado, WebRequest request) {
+        Map<String, String> errores = new TreeMap<>();
+        for (FieldError error : ex.getBindingResult().getFieldErrors()) {
+            errores.merge(error.getField(), String.valueOf(error.getDefaultMessage()), (a, b) -> a + "; " + b);
+        }
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "La petición tiene datos inválidos. Revise el detalle por campo.");
+        problema.setTitle("Datos inválidos");
+        problema.setProperty("errores", errores);
+        return handleExceptionInternal(ex, problema, encabezados, HttpStatus.BAD_REQUEST, request);
+    }
+
+    /**
+     * JSON malformado, incompatible con el DTO o ausente: 400 con un mensaje propio. Nunca se usa
+     * {@code ex.getMessage()}, que trae el texto del analizador (clases, línea y columna).
+     */
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+            HttpHeaders encabezados, HttpStatusCode estado, WebRequest request) {
+        String detalle = "El cuerpo de la petición falta o no es un JSON válido.";
+        if (ex.getCause() instanceof MismatchedInputException incompatible && !incompatible.getPath().isEmpty()) {
+            detalle = "El campo '" + rutaDelCampo(incompatible) + "' tiene un valor incompatible.";
+        }
+        return respuesta(ex, HttpStatus.BAD_REQUEST, "Cuerpo ilegible", detalle, request);
+    }
+
+    /** Ruta del campo en el JSON, p. ej. {@code detalles[0].cantidad}. */
+    private static String rutaDelCampo(MismatchedInputException ex) {
+        StringBuilder ruta = new StringBuilder();
+        for (var referencia : ex.getPath()) {
+            if (referencia.getFieldName() != null) {
+                if (!ruta.isEmpty()) {
+                    ruta.append('.');
+                }
+                ruta.append(referencia.getFieldName());
+            } else if (referencia.getIndex() >= 0) {
+                ruta.append('[').append(referencia.getIndex()).append(']');
+            }
+        }
+        return ruta.toString();
     }
 }

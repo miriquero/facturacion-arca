@@ -5,9 +5,9 @@ import ar.edu.utn.frm.facturacion.model.Cliente;
 import ar.edu.utn.frm.facturacion.model.CondicionIva;
 import ar.edu.utn.frm.facturacion.model.Contacto;
 import ar.edu.utn.frm.facturacion.model.Domicilio;
-import ar.edu.utn.frm.facturacion.model.EstadoFactura;
-import ar.edu.utn.frm.facturacion.model.FacturaVenta;
-import ar.edu.utn.frm.facturacion.model.FacturaVentaDetalle;
+import ar.edu.utn.frm.facturacion.dto.CambioEstadoRequestDTO;
+import ar.edu.utn.frm.facturacion.dto.FacturaDetalleRequestDTO;
+import ar.edu.utn.frm.facturacion.dto.FacturaRequestDTO;
 import ar.edu.utn.frm.facturacion.model.ListaPrecio;
 import ar.edu.utn.frm.facturacion.model.ListaPrecioArticulo;
 import ar.edu.utn.frm.facturacion.model.Marca;
@@ -27,7 +27,11 @@ import ar.edu.utn.frm.facturacion.repository.PuntoVentaRepository;
 import ar.edu.utn.frm.facturacion.repository.RubroRepository;
 import ar.edu.utn.frm.facturacion.repository.TipoMonedaRepository;
 import ar.edu.utn.frm.facturacion.repository.UsuarioRepository;
+import ar.edu.utn.frm.facturacion.service.FacturaService;
+import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -36,9 +40,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Carga PROVISORIA de datos de ejemplo (etapa 1): usuarios, catálogos, clientes y seis facturas con
- * importes escritos como literales. No calcula importes ni aplica reglas de numeración o CAE: son datos.
- * En la etapa 4 el bloque de facturas se reemplaza por llamadas a {@code FacturaService} (DD-11).
+ * Carga de datos de ejemplo: usuarios, catálogos, clientes y seis facturas creadas con {@code FacturaService}
+ * (etapa 4, DD-11), de modo que importes, numeración, CAE y baja lógica siguen las reglas reales de la API.
+ * Todo ocurre en una transacción y con el usuario {@code sistema} en el contexto de auditoría, que se limpia al terminar.
  * Se omite con el perfil {@code test} y si la base ya tiene usuarios (no repara cargas parciales).
  */
 @Component
@@ -58,12 +62,15 @@ public class DataLoader implements CommandLineRunner {
     private final ListaPrecioArticuloRepository listaPrecioArticuloRepository;
     private final ClienteRepository clienteRepository;
     private final FacturaVentaRepository facturaVentaRepository;
+    private final FacturaService facturaService;
+    private final Clock reloj;
 
     public DataLoader(UsuarioRepository usuarioRepository, PuntoVentaRepository puntoVentaRepository,
             CondicionIvaRepository condicionIvaRepository, TipoMonedaRepository tipoMonedaRepository,
             RubroRepository rubroRepository, MarcaRepository marcaRepository, ArticuloRepository articuloRepository,
             ListaPrecioRepository listaPrecioRepository, ListaPrecioArticuloRepository listaPrecioArticuloRepository,
-            ClienteRepository clienteRepository, FacturaVentaRepository facturaVentaRepository) {
+            ClienteRepository clienteRepository, FacturaVentaRepository facturaVentaRepository,
+            FacturaService facturaService, Clock reloj) {
         this.usuarioRepository = usuarioRepository;
         this.puntoVentaRepository = puntoVentaRepository;
         this.condicionIvaRepository = condicionIvaRepository;
@@ -75,6 +82,8 @@ public class DataLoader implements CommandLineRunner {
         this.listaPrecioArticuloRepository = listaPrecioArticuloRepository;
         this.clienteRepository = clienteRepository;
         this.facturaVentaRepository = facturaVentaRepository;
+        this.facturaService = facturaService;
+        this.reloj = reloj;
     }
 
     @Override
@@ -93,6 +102,9 @@ public class DataLoader implements CommandLineRunner {
             Base base = cargarCatalogos();
             Cliente[] clientes = cargarClientes();
             cargarFacturas(base, clientes[0], clientes[1]);
+            // Flush con el usuario aún en el contexto: los UPDATE pendientes (p. ej. los que completan la
+            // modificación) se emiten acá y no al confirmar la transacción, cuando el finally ya lo limpió.
+            facturaVentaRepository.flush();
             LOG.info("[DataLoader] Datos de ejemplo cargados.");
         } finally {
             UsuarioActual.clear();
@@ -137,67 +149,44 @@ public class DataLoader implements CommandLineRunner {
     }
 
     /**
-     * Seis facturas de ejemplo con importes LITERALES (IVA 21 % ya incluido en los números): no se calcula nada.
-     * Numeración y CAE son datos escritos a mano; la lógica real llega en la etapa 4.
+     * Seis facturas de ejemplo creadas y cambiadas de estado con {@link FacturaService} (DD-11): cálculo de
+     * importes, numeración por punto de venta, CAE, fechas y baja lógica siguen las reglas reales de la API. Las
+     * emisiones van en este orden para reproducir la numeración: PV 1 emite F1, F2 y F3 (1, 2 y 3) y anula la F3;
+     * PV 2 emite la F4 (1); la F5 y la F6 quedan en BORRADOR. Los métodos del servicio se unen a la transacción
+     * del loader: toda la carga sigue siendo atómica.
      */
     private void cargarFacturas(Base b, Cliente juan, Cliente maria) {
-        // EMITIDA nº 1, PV 1: 2 martillos
-        factura(b, b.pv1(), 1L, 60, juan, b.pesos(), EstadoFactura.EMITIDA, "70000000000001", 7260,
-                renglon(b.martillo(), "Martillo", 2, 3000, 6000, 1260, 7260));
-        // EMITIDA nº 2, PV 1, sin cliente: 1 televisor
-        factura(b, b.pv1(), 2L, 40, null, b.pesos(), EstadoFactura.EMITIDA, "70000000000002", 72600,
-                renglon(b.televisor(), "Televisor", 1, 60000, 60000, 12600, 72600));
-        // ANULADA nº 3, PV 1: 3 cables
-        FacturaVenta anulada = factura(b, b.pv1(), 3L, 30, maria, b.pesos(), EstadoFactura.ANULADA, "70000000000003",
-                29040, renglon(b.cable(), "Cable HDMI", 3, 8000, 24000, 5040, 29040));
-        anulada.setFechaAnulacion(LocalDate.now().minusDays(29));
-        // EMITIDA nº 1, PV 2, en dólares: 1 cable
-        factura(b, b.pv2(), 1L, 20, juan, b.dolares(), EstadoFactura.EMITIDA, "70000000000004", 9680,
-                renglon(b.cable(), "Cable HDMI", 1, 8000, 8000, 1680, 9680));
-        // BORRADOR con cliente: 1 martillo y 2 cables
-        factura(b, b.pv1(), null, 5, juan, b.pesos(), EstadoFactura.BORRADOR, null, 22990,
-                renglon(b.martillo(), "Martillo", 1, 3000, 3000, 630, 3630),
-                renglon(b.cable(), "Cable HDMI", 2, 8000, 16000, 3360, 19360));
-        // BORRADOR sin cliente: 1 televisor
-        factura(b, b.pv2(), null, 1, null, b.pesos(), EstadoFactura.BORRADOR, null, 72600,
-                renglon(b.televisor(), "Televisor", 1, 60000, 60000, 12600, 72600));
+        // F1: PV 1, Juan, 2 martillos -> EMITIDA nº 1 (importe 7260)
+        emitir(crear(b, b.pv1(), juan, b.pesos(), 60, renglon(b.martillo(), "Martillo", "2")));
+        // F2: PV 1, sin cliente, 1 televisor -> EMITIDA nº 2 (72600)
+        emitir(crear(b, b.pv1(), null, b.pesos(), 40, renglon(b.televisor(), "Televisor", "1")));
+        // F3: PV 1, María, 3 cables -> EMITIDA nº 3 y luego ANULADA con motivo (29040)
+        Long anulada = emitir(crear(b, b.pv1(), maria, b.pesos(), 30, renglon(b.cable(), "Cable HDMI", "3")));
+        facturaService.cambiarEstado(anulada, new CambioEstadoRequestDTO("ANULADA", "Anulada por error de carga"));
+        // F4: PV 2, Juan, en dólares, 1 cable -> EMITIDA nº 1 de ese punto (9680)
+        emitir(crear(b, b.pv2(), juan, b.dolares(), 20, renglon(b.cable(), "Cable HDMI", "1")));
+        // F5: BORRADOR con cliente: 1 martillo y 2 cables (22990)
+        crear(b, b.pv1(), juan, b.pesos(), 5, renglon(b.martillo(), "Martillo", "1"),
+                renglon(b.cable(), "Cable HDMI", "2"));
+        // F6: BORRADOR sin cliente: 1 televisor (72600)
+        crear(b, b.pv2(), null, b.pesos(), 1, renglon(b.televisor(), "Televisor", "1"));
     }
 
-    private FacturaVenta factura(Base b, PuntoVenta puntoVenta, Long numero, int diasAtras, Cliente cliente, TipoMoneda moneda,
-            EstadoFactura estado, String cae, double total, FacturaVentaDetalle... renglones) {
-        FacturaVenta f = new FacturaVenta();
-        f.setPuntoVenta(puntoVenta);
-        f.setNumero(numero);
-        f.setFechaEmision(LocalDate.now().minusDays(diasAtras));
-        f.setCliente(cliente);
-        f.setCondicionIva(b.condicion());
-        f.setTipoMoneda(moneda);
-        f.setEstado(estado);
-        f.setImporteTotal(total);
-        f.setImporteCobrado(0);
-        f.setImporteSaldo(total);
-        if (cae != null) {
-            f.setCae(cae);
-            f.setCaeFechaVencimiento(f.getFechaEmision().plusDays(10));
-            f.setResultadoAfip("A");
-        }
-        for (FacturaVentaDetalle renglon : renglones) {
-            f.agregarDetalle(renglon);
-        }
-        return facturaVentaRepository.save(f);
+    private Long crear(Base b, PuntoVenta puntoVenta, Cliente cliente, TipoMoneda moneda, int diasAtras,
+            FacturaDetalleRequestDTO... renglones) {
+        FacturaRequestDTO solicitud = new FacturaRequestDTO(cliente == null ? null : cliente.getId(),
+                b.condicion().getId(), puntoVenta.getId(), moneda.getId(), LocalDate.now(reloj).minusDays(diasAtras),
+                null, List.of(renglones));
+        return facturaService.crear(solicitud).getId();
     }
 
-    private FacturaVentaDetalle renglon(ListaPrecioArticulo precio, String descripcion, double cantidad,
-            double precioUnitario, double neto, double iva, double subtotal) {
-        FacturaVentaDetalle d = new FacturaVentaDetalle();
-        d.setListaPrecioArticulo(precio);
-        d.setDescripcion(descripcion);
-        d.setCantidad(cantidad);
-        d.setPrecioUnitario(precioUnitario);
-        d.setImporteNeto(neto);
-        d.setImporteIva(iva);
-        d.setImporteSubtotal(subtotal);
-        return d;
+    private Long emitir(Long facturaId) {
+        facturaService.cambiarEstado(facturaId, new CambioEstadoRequestDTO("EMITIDA", null));
+        return facturaId;
+    }
+
+    private FacturaDetalleRequestDTO renglon(ListaPrecioArticulo precio, String descripcion, String cantidad) {
+        return new FacturaDetalleRequestDTO(precio.getId(), new BigDecimal(cantidad), null, descripcion);
     }
 
     private Usuario usuario(String identificador, String nombre, String apellido) {

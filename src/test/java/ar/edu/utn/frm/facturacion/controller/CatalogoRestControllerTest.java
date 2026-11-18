@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import ar.edu.utn.frm.facturacion.dto.OpcionDTO;
+import ar.edu.utn.frm.facturacion.repository.UsuarioRepository;
 import ar.edu.utn.frm.facturacion.service.CatalogoService;
 import java.time.Clock;
 import java.time.Instant;
@@ -38,6 +39,9 @@ class CatalogoRestControllerTest {
 
     @MockBean
     private CatalogoService servicio;
+
+    @MockBean
+    private UsuarioRepository usuarios;
 
     private static final List<OpcionDTO> OPCIONES = List.of(
             new OpcionDTO(1L, "Primera", null, null),

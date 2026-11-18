@@ -1,4 +1,4 @@
-### Ejemplos de la API REST de lectura (etapa 3).
+### Ejemplos de la API REST de lectura (etapa 3) y de escritura (etapa 4, al final).
 ### Formato de VS Code REST Client / IntelliJ HTTP Client. Arrancar antes la aplicación:
 ###   JAVA_HOME=<JDK 17> ./gradlew bootRun
 ### El DataLoader carga 6 facturas con fechas relativas a hoy, por eso los ejemplos de fechas usan rangos amplios.
@@ -118,3 +118,140 @@ Origin: http://localhost:5173
 ### Origen no admitido: 403 sin Access-Control-Allow-Origin (CORS no autentica: sin el encabezado Origin, como curl, responde normal)
 GET {{base}}/api/facturas
 Origin: http://evil.example
+
+
+### ================================================================ Etapa 4: escritura, estados y concurrencia
+### Ids de ejemplo con el DataLoader (ajustarlos con los catálogos si la base cambió):
+###   clienteId 1 = Juan Servicios, condicionIvaId 2 = Responsable Inscripto, puntoVentaId 1 = Casa Central,
+###   tipoMonedaId 1 = PES, listaPrecioArticuloId 1 = Martillo (3000), 3 = Cable HDMI (8000).
+### X-Usuario declara quién opera (sistema, acortez o mriquero); NO autentica. Sin encabezado o con uno desconocido
+### se usa "sistema". El precio nunca se envía: sale de la lista de precios.
+### Las facturas 5 y 6 del DataLoader son BORRADOR (editables); la 1, 2 y 4 están EMITIDA y la 3 ANULADA.
+@borrador = 5
+@emitida = 1
+
+### ---------------------------------------------------------------- Alta (POST)
+
+### Alta de un borrador con cliente y dos renglones: 201, Location /api/facturas/{id}, estado BORRADOR, total 22990.0
+POST {{base}}/api/facturas
+Content-Type: application/json
+X-Usuario: acortez
+
+{"clienteId": 1, "condicionIvaId": 2, "puntoVentaId": 1, "tipoMonedaId": 1, "observaciones": "Entrega en sucursal",
+ "detalles": [{"listaPrecioArticuloId": 1, "cantidad": 1},
+              {"listaPrecioArticuloId": 3, "cantidad": 2, "porcentajeBonificacion": 0}]}
+
+### Alta sin cliente (Consumidor Final) y con fecha informada: 201
+POST {{base}}/api/facturas
+Content-Type: application/json
+
+{"condicionIvaId": 2, "puntoVentaId": 1, "tipoMonedaId": 1, "fechaEmision": "2026-11-01",
+ "detalles": [{"listaPrecioArticuloId": 1, "cantidad": 2, "porcentajeBonificacion": 10, "descripcion": "Martillo grande"}]}
+
+### Descripción de 256 caracteres: 400 problem+json con errores["detalles[0].descripcion"] (255 pasa)
+POST {{base}}/api/facturas
+Content-Type: application/json
+
+{"condicionIvaId": 2, "puntoVentaId": 1, "tipoMonedaId": 1,
+ "detalles": [{"listaPrecioArticuloId": 1, "cantidad": 1, "descripcion": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}]}
+
+### Sin puntoVentaId y con cantidad 0: 400 con errores {puntoVentaId, detalles[0].cantidad}
+POST {{base}}/api/facturas
+Content-Type: application/json
+
+{"condicionIvaId": 2, "tipoMonedaId": 1, "detalles": [{"listaPrecioArticuloId": 1, "cantidad": 0}]}
+
+### JSON malformado: 400 "Cuerpo ilegible" sin detalles del analizador
+POST {{base}}/api/facturas
+Content-Type: application/json
+
+{"puntoVentaId": 1,
+
+### Referencia inexistente (tipo de moneda 999999): 404 que menciona el id; no se guarda nada
+POST {{base}}/api/facturas
+Content-Type: application/json
+
+{"condicionIvaId": 2, "puntoVentaId": 1, "tipoMonedaId": 999999,
+ "detalles": [{"listaPrecioArticuloId": 1, "cantidad": 1}]}
+
+### ---------------------------------------------------------------- Edición (PUT, reemplazo completo de un BORRADOR)
+
+### Editar el borrador: 200 con la fila actualizada (reemplaza cabecera y renglones, recalcula el total)
+PUT {{base}}/api/facturas/{{borrador}}
+Content-Type: application/json
+X-Usuario: mriquero
+
+{"clienteId": 1, "condicionIvaId": 2, "puntoVentaId": 1, "tipoMonedaId": 1,
+ "detalles": [{"listaPrecioArticuloId": 3, "cantidad": 1}]}
+
+### Editar una EMITIDA: 409 problem+json con el estado actual (solo se editan borradores)
+PUT {{base}}/api/facturas/{{emitida}}
+Content-Type: application/json
+
+{"clienteId": 1, "condicionIvaId": 2, "puntoVentaId": 1, "tipoMonedaId": 1,
+ "detalles": [{"listaPrecioArticuloId": 3, "cantidad": 1}]}
+
+### Editar una factura inexistente: 404
+PUT {{base}}/api/facturas/999999
+Content-Type: application/json
+
+{"condicionIvaId": 2, "puntoVentaId": 1, "tipoMonedaId": 1, "detalles": [{"listaPrecioArticuloId": 1, "cantidad": 1}]}
+
+### ---------------------------------------------------------------- Estados (PATCH /estado)
+
+### Emitir un borrador: 200, EMITIDA, número = máximo del punto de venta + 1, CAE de 14 dígitos, vencimiento hoy + 10
+PATCH {{base}}/api/facturas/{{borrador}}/estado
+Content-Type: application/json
+X-Usuario: acortez
+
+{"estado": "EMITIDA"}
+
+### Anular una emitida con motivo: 200, ANULADA, fecha de anulación hoy, baja a nombre de X-Usuario (la observación reemplaza)
+PATCH {{base}}/api/facturas/{{emitida}}/estado
+Content-Type: application/json
+X-Usuario: acortez
+
+{"estado": "ANULADA", "observaciones": "Error en el cliente"}
+
+### Anular un BORRADOR (la 6): 409 con ambos estados en el detalle (BORRADOR a ANULADA no está permitido)
+PATCH {{base}}/api/facturas/6/estado
+Content-Type: application/json
+
+{"estado": "ANULADA"}
+
+### Estado desconocido: 400 con los valores admitidos (IN-01, pendiente de confirmar con el docente)
+PATCH {{base}}/api/facturas/6/estado
+Content-Type: application/json
+
+{"estado": "PAGADA"}
+
+### Estado en blanco: 400 con errores.estado
+PATCH {{base}}/api/facturas/6/estado
+Content-Type: application/json
+
+{"estado": "  "}
+
+### ---------------------------------------------------------------- Eliminación (DELETE, solo borradores)
+
+### Borrar un borrador (la 6): 204 sin cuerpo; GET posterior 404
+DELETE {{base}}/api/facturas/6
+
+### Borrar una EMITIDA (la 2): 409 (una emitida se anula, no se borra)
+DELETE {{base}}/api/facturas/2
+
+### Borrar una inexistente: 404
+DELETE {{base}}/api/facturas/999999
+
+### ---------------------------------------------------------------- CORS de escritura
+
+### Preflight de PATCH con X-Usuario: 200 con Allow-Methods y Allow-Headers (content-type, x-usuario)
+OPTIONS {{base}}/api/facturas/1/estado
+Origin: http://localhost:5173
+Access-Control-Request-Method: PATCH
+Access-Control-Request-Headers: content-type, x-usuario
+
+### Preflight con un encabezado no previsto (authorization): 403
+OPTIONS {{base}}/api/facturas
+Origin: http://localhost:5173
+Access-Control-Request-Method: POST
+Access-Control-Request-Headers: authorization

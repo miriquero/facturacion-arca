@@ -4,19 +4,31 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import ar.edu.utn.frm.facturacion.dto.CambioEstadoRequestDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaDetalladaDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaDetalleDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaFiltrosDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaReporteDTO;
+import ar.edu.utn.frm.facturacion.dto.FacturaRequestDTO;
+import ar.edu.utn.frm.facturacion.exception.ImporteNoRepresentableException;
 import ar.edu.utn.frm.facturacion.exception.ParametroInvalidoException;
 import ar.edu.utn.frm.facturacion.exception.RecursoNoEncontradoException;
+import ar.edu.utn.frm.facturacion.exception.ReglaNegocioException;
+import ar.edu.utn.frm.facturacion.model.DatosDePrueba;
 import ar.edu.utn.frm.facturacion.model.EstadoFactura;
+import ar.edu.utn.frm.facturacion.model.Usuario;
+import ar.edu.utn.frm.facturacion.model.UsuarioActual;
+import ar.edu.utn.frm.facturacion.repository.UsuarioRepository;
 import ar.edu.utn.frm.facturacion.report.ArchivoReporte;
 import ar.edu.utn.frm.facturacion.report.GlifoNoSoportadoException;
 import ar.edu.utn.frm.facturacion.service.FacturaService;
@@ -28,6 +40,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -55,6 +69,9 @@ class FacturaRestControllerTest {
 
     @MockBean
     private FacturaService servicio;
+
+    @MockBean
+    private UsuarioRepository usuarios;
 
     private static FacturaReporteDTO fila(long id, Long numero, LocalDate fecha, String cliente, double total,
             long items, EstadoFactura estado) {
@@ -289,8 +306,9 @@ class FacturaRestControllerTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"DELETE, /api/facturas/1", "POST, /api/facturas", "PUT, /api/facturas/1", "PATCH, /api/facturas/1"})
-    void escrituraTodaviaNoDisponibleEs405ConProblemDetail(String metodo, String ruta) throws Exception {
+    @CsvSource({"PUT, /api/facturas",
+            "DELETE, /api/facturas"})
+    void putYDeleteSobreLaColeccionSon405ConProblemDetail(String metodo, String ruta) throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .request(org.springframework.http.HttpMethod.valueOf(metodo), ruta)
                         .contentType("application/json").content("{}"))
@@ -298,6 +316,369 @@ class FacturaRestControllerTest {
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.status").value(405))
                 .andExpect(jsonPath("$.timestamp").value("2026-11-17T12:00:00Z"));
+        verifyNoInteractions(servicio);
+    }
+
+    // --- Interceptor de X-Usuario registrado para /api/** (spec auditoria-por-request) ---
+
+    @Test
+    void elUsuarioDeclaradoEstaEnElContextoMientrasSeAtiendeLaPeticion() throws Exception {
+        Usuario acortez = DatosDePrueba.usuario("acortez");
+        when(usuarios.findByUsuario("acortez")).thenReturn(Optional.of(acortez));
+        AtomicReference<Usuario> visto = new AtomicReference<>();
+        when(servicio.listar(org.mockito.ArgumentMatchers.any())).thenAnswer(invocacion -> {
+            visto.set(UsuarioActual.get());
+            return List.of();
+        });
+
+        mvc.perform(get("/api/facturas").header("X-Usuario", "acortez")).andExpect(status().isOk());
+
+        assertThat(visto.get()).isSameAs(acortez);
+        assertThat(UsuarioActual.get()).as("el contexto se limpia al terminar la petición").isNull();
+    }
+
+    @Test
+    void elContextoQuedaVacioTambienCuandoLaPeticionTerminaEnError() throws Exception {
+        when(usuarios.findByUsuario("acortez")).thenReturn(Optional.of(DatosDePrueba.usuario("acortez")));
+        when(servicio.listar(org.mockito.ArgumentMatchers.any())).thenThrow(new RuntimeException("falla interna"));
+
+        mvc.perform(get("/api/facturas").header("X-Usuario", "acortez"))
+                .andExpect(status().isInternalServerError());
+
+        assertThat(UsuarioActual.get()).isNull();
+    }
+
+    // --- Alta: POST /api/facturas (spec api-borradores-factura, validacion-request-factura) ---
+
+    private static final String CUERPO_VALIDO = """
+            {"clienteId": 1, "condicionIvaId": 2, "puntoVentaId": 3, "tipoMonedaId": 4,
+             "fechaEmision": "2026-11-01", "observaciones": "Entrega en sucursal",
+             "detalles": [{"listaPrecioArticuloId": 5, "cantidad": 2, "porcentajeBonificacion": 10,
+                           "descripcion": "Martillo grande"}]}""";
+
+    @Test
+    void altaValidaDevuelve201ConLocationYLosDiezCampos() throws Exception {
+        when(servicio.crear(org.mockito.ArgumentMatchers.any())).thenReturn(
+                fila(7, null, LocalDate.of(2026, 11, 1), "Juan Servicios", 6534.00, 1, EstadoFactura.BORRADOR));
+
+        mvc.perform(post("/api/facturas").contentType("application/json").content(CUERPO_VALIDO))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/api/facturas/7")))
+                .andExpect(jsonPath("$.id").value(7))
+                .andExpect(jsonPath("$.numeroFactura").doesNotExist())
+                .andExpect(jsonPath("$.fechaEmision").value("2026-11-01"))
+                .andExpect(jsonPath("$.clienteDenominacion").value("Juan Servicios"))
+                .andExpect(jsonPath("$.condicionIva").value("Responsable Inscripto"))
+                .andExpect(jsonPath("$.puntoVentaDescripcion").value("Casa Central"))
+                .andExpect(jsonPath("$.importeTotal").value(6534.00))
+                .andExpect(jsonPath("$.cantidadItems").value(1))
+                .andExpect(jsonPath("$.estado").value("BORRADOR"))
+                .andExpect(jsonPath("$.codigoMoneda").value("PES"));
+
+        ArgumentCaptor<FacturaRequestDTO> captor = ArgumentCaptor.forClass(FacturaRequestDTO.class);
+        verify(servicio).crear(captor.capture());
+        FacturaRequestDTO recibido = captor.getValue();
+        assertThat(recibido.clienteId()).isEqualTo(1L);
+        assertThat(recibido.fechaEmision()).isEqualTo(LocalDate.of(2026, 11, 1));
+        assertThat(recibido.detalles()).hasSize(1);
+        assertThat(recibido.detalles().get(0).cantidad()).isEqualByComparingTo("2");
+        assertThat(recibido.detalles().get(0).porcentajeBonificacion()).isEqualByComparingTo("10");
+        assertThat(recibido.detalles().get(0).listaPrecioArticuloId()).isEqualTo(5L);
+    }
+
+    @Test
+    void sinPuntoDeVentaDevuelve400ConErrorPorCampo() throws Exception {
+        String cuerpo = """
+                {"condicionIvaId": 2, "tipoMonedaId": 4,
+                 "detalles": [{"listaPrecioArticuloId": 5, "cantidad": 1}]}""";
+
+        mvc.perform(post("/api/facturas").contentType("application/json").content(cuerpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("Datos inválidos"))
+                .andExpect(jsonPath("$.timestamp").value("2026-11-17T12:00:00Z"))
+                .andExpect(jsonPath("$.errores.puntoVentaId").value("El punto de venta es obligatorio"));
+
+        verifyNoInteractions(servicio);
+    }
+
+    @Test
+    void variosErroresSeInformanTodosJuntosYSinTocarElServicio() throws Exception {
+        String cuerpo = """
+                {"condicionIvaId": 2, "puntoVentaId": 3,
+                 "detalles": [{"listaPrecioArticuloId": 5, "cantidad": 0}]}""";
+
+        mvc.perform(post("/api/facturas").contentType("application/json").content(cuerpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.length()").value(2))
+                .andExpect(jsonPath("$.errores.tipoMonedaId").value("El tipo de moneda es obligatorio"))
+                .andExpect(jsonPath("$.errores['detalles[0].cantidad']")
+                        .value("La cantidad debe ser mayor que cero"));
+
+        verifyNoInteractions(servicio);
+    }
+
+    // --- Límites de la validación (RN-VA-01, RN-VA-02) ---
+
+    private static String cuerpoConRenglon(String renglon) {
+        return "{\"condicionIvaId\": 2, \"puntoVentaId\": 3, \"tipoMonedaId\": 4, \"detalles\": [" + renglon + "]}";
+    }
+
+    private static String renglonCon(String campo, String valorJson) {
+        String base = "\"listaPrecioArticuloId\": 5, \"cantidad\": 1";
+        return "{" + base + ", \"" + campo + "\": " + valorJson + "}";
+    }
+
+    private void permitirAlta() {
+        when(servicio.crear(org.mockito.ArgumentMatchers.any())).thenReturn(
+                fila(7, null, LocalDate.of(2026, 11, 1), "Consumidor Final", 1.0, 1, EstadoFactura.BORRADOR));
+    }
+
+    private void assertAceptado(String cuerpo) throws Exception {
+        permitirAlta();
+        mvc.perform(post("/api/facturas").contentType("application/json").content(cuerpo))
+                .andExpect(status().isCreated());
+    }
+
+    private void assertRechazadoEn(String cuerpo, String campo) throws Exception {
+        mvc.perform(post("/api/facturas").contentType("application/json").content(cuerpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores['" + campo + "']").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.emptyOrNullString())))
+                .andExpect(jsonPath("$.errores.length()").value(1));
+        verifyNoInteractions(servicio);
+    }
+
+    @Test
+    void descripcionDe255PasaYDe256EsRechazada() throws Exception {
+        assertAceptado(cuerpoConRenglon(renglonCon("descripcion", "\"" + "a".repeat(255) + "\"")));
+        org.mockito.Mockito.reset(servicio);
+        assertRechazadoEn(cuerpoConRenglon(renglonCon("descripcion", "\"" + "a".repeat(256) + "\"")),
+                "detalles[0].descripcion");
+    }
+
+    @Test
+    void observacionesDe500PasanYDe501SonRechazadas() throws Exception {
+        String base = "\"condicionIvaId\": 2, \"puntoVentaId\": 3, \"tipoMonedaId\": 4, "
+                + "\"detalles\": [{\"listaPrecioArticuloId\": 5, \"cantidad\": 1}]";
+        assertAceptado("{" + base + ", \"observaciones\": \"" + "o".repeat(500) + "\"}");
+        org.mockito.Mockito.reset(servicio);
+        assertRechazadoEn("{" + base + ", \"observaciones\": \"" + "o".repeat(501) + "\"}", "observaciones");
+    }
+
+    @ParameterizedTest(name = "detalles {0}")
+    @CsvSource(delimiter = '|', value = {
+            "vacío|\"detalles\": []",
+            "ausente|\"x\": 1"})
+    void sinRenglonesEsRechazada(String caso, String fragmento) throws Exception {
+        assertRechazadoEn("{\"condicionIvaId\": 2, \"puntoVentaId\": 3, \"tipoMonedaId\": 4, " + fragmento + "}",
+                "detalles");
+    }
+
+    @Test
+    void unRenglonNuloEsRechazadoYNombraSuPosicion() throws Exception {
+        assertRechazadoEn("{\"condicionIvaId\": 2, \"puntoVentaId\": 3, \"tipoMonedaId\": 4, \"detalles\": ["
+                + "{\"listaPrecioArticuloId\": 5, \"cantidad\": 1}, null]}", "detalles[1]");
+    }
+
+    @ParameterizedTest(name = "cantidad {0}")
+    @ValueSource(strings = {"0", "-1", "-0.01"})
+    void cantidadNoPositivaEsRechazada(String cantidad) throws Exception {
+        assertRechazadoEn(cuerpoConRenglon("{\"listaPrecioArticuloId\": 5, \"cantidad\": " + cantidad + "}"),
+                "detalles[0].cantidad");
+    }
+
+    @Test
+    void cantidadAusenteEsRechazadaYFraccionariaPasa() throws Exception {
+        assertRechazadoEn(cuerpoConRenglon("{\"listaPrecioArticuloId\": 5}"), "detalles[0].cantidad");
+        assertAceptado(cuerpoConRenglon("{\"listaPrecioArticuloId\": 5, \"cantidad\": 0.5}"));
+    }
+
+    @ParameterizedTest(name = "bonificación {0}")
+    @ValueSource(strings = {"-0.01", "100.01", "-1", "101"})
+    void bonificacionFueraDeRangoEsRechazada(String bonificacion) throws Exception {
+        assertRechazadoEn(cuerpoConRenglon(renglonCon("porcentajeBonificacion", bonificacion)),
+                "detalles[0].porcentajeBonificacion");
+    }
+
+    @ParameterizedTest(name = "bonificación {0}")
+    @ValueSource(strings = {"0", "100", "0.01", "99.99", "null"})
+    void bonificacionDentroDelRangoOOmitidaPasa(String bonificacion) throws Exception {
+        assertAceptado(cuerpoConRenglon(renglonCon("porcentajeBonificacion", bonificacion)));
+    }
+
+    @Test
+    void renglonSinListaPrecioArticuloEsRechazado() throws Exception {
+        assertRechazadoEn(cuerpoConRenglon("{\"cantidad\": 1}"), "detalles[0].listaPrecioArticuloId");
+    }
+
+    // --- JSON ilegible (RN-VA-06): mensaje legible sin detalles internos del analizador ---
+
+    private String cuerpoDeRespuesta400(String contenido) throws Exception {
+        var pedido = post("/api/facturas").contentType("application/json");
+        if (contenido != null) {
+            pedido = pedido.content(contenido);
+        }
+        return mvc.perform(pedido)
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.title").value("Cuerpo ilegible"))
+                .andExpect(jsonPath("$.timestamp").value("2026-11-17T12:00:00Z"))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+    }
+
+    @Test
+    void jsonMalformadoDevuelve400SinDetallesDelAnalizador() throws Exception {
+        String cuerpo = cuerpoDeRespuesta400("{\"puntoVentaId\": 1,");
+
+        assertThat(cuerpo).doesNotContain("JSON parse error").doesNotContain("com.fasterxml")
+                .doesNotContain("line:").doesNotContain("column:").doesNotContain("Exception");
+        assertThat(cuerpo).contains("El cuerpo de la petición falta o no es un JSON válido");
+        verifyNoInteractions(servicio);
+    }
+
+    @Test
+    void tipoIncompatibleNombraElCampoSinDetallesInternos() throws Exception {
+        String cuerpo = cuerpoDeRespuesta400(cuerpoConRenglon(
+                "{\"listaPrecioArticuloId\": 5, \"cantidad\": \"mucho\"}"));
+
+        assertThat(cuerpo).contains("detalles[0].cantidad").contains("valor incompatible");
+        assertThat(cuerpo).doesNotContain("com.fasterxml").doesNotContain("BigDecimal").doesNotContain("mucho");
+        verifyNoInteractions(servicio);
+    }
+
+    @Test
+    void cuerpoAusenteDevuelve400() throws Exception {
+        String cuerpo = cuerpoDeRespuesta400(null);
+
+        assertThat(cuerpo).contains("El cuerpo de la petición falta o no es un JSON válido");
+        verifyNoInteractions(servicio);
+    }
+
+    // --- 409 y 404 de negocio ---
+
+    @Test
+    void reglaDeNegocioSeTraduceA409ConDetalleYMarcaTemporal() throws Exception {
+        when(servicio.crear(org.mockito.ArgumentMatchers.any())).thenThrow(new ReglaNegocioException(
+                "La factura 7 está en estado ANULADA y no admite la operación pedida"));
+
+        mvc.perform(post("/api/facturas").contentType("application/json").content(CUERPO_VALIDO))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.title").value("Conflicto con el estado de la factura"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("ANULADA")))
+                .andExpect(jsonPath("$.timestamp").value("2026-11-17T12:00:00Z"));
+    }
+
+    @Test
+    void importeNoRepresentableSeTraduceA409ConSuPropioTitulo() throws Exception {
+        when(servicio.crear(org.mockito.ArgumentMatchers.any())).thenThrow(
+                new ImporteNoRepresentableException("iva", new java.math.BigDecimal("259259256925925.93")));
+
+        mvc.perform(post("/api/facturas").contentType("application/json").content(CUERPO_VALIDO))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.title").value("Importe no representable"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("259259256925925.93")))
+                .andExpect(jsonPath("$.timestamp").value("2026-11-17T12:00:00Z"));
+    }
+
+    @Test
+    void referenciaInexistenteSeTraduceA404ConElIdBuscado() throws Exception {
+        when(servicio.crear(org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new RecursoNoEncontradoException("Condición de IVA", 999999L));
+
+        mvc.perform(post("/api/facturas").contentType("application/json").content(CUERPO_VALIDO))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("999999")))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Condición de IVA")))
+                .andExpect(jsonPath("$.timestamp").value("2026-11-17T12:00:00Z"));
+    }
+
+    // --- Edición: PUT /api/facturas/{id} ---
+
+    @Test
+    void edicionValidaDevuelve200ConLaFilaActualizada() throws Exception {
+        when(servicio.actualizar(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.any())).thenReturn(
+                fila(7, null, LocalDate.of(2026, 11, 1), "Consumidor Final", 9680.00, 1, EstadoFactura.BORRADOR));
+
+        mvc.perform(put("/api/facturas/7").contentType("application/json").content(CUERPO_VALIDO))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(7))
+                .andExpect(jsonPath("$.importeTotal").value(9680.00))
+                .andExpect(jsonPath("$.estado").value("BORRADOR"));
+    }
+
+    @Test
+    void edicionConCuerpoInvalidoEs400SinTocarElServicio() throws Exception {
+        mvc.perform(put("/api/facturas/7").contentType("application/json").content("{\"detalles\": []}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores['detalles']").exists());
+
+        verifyNoInteractions(servicio);
+    }
+
+    // --- Eliminación: DELETE /api/facturas/{id} ---
+
+    @Test
+    void eliminacionDevuelve204SinCuerpo() throws Exception {
+        mvc.perform(delete("/api/facturas/7"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        verify(servicio).eliminar(7L);
+    }
+
+    @Test
+    void eliminarUnaFacturaInexistenteEs404() throws Exception {
+        org.mockito.Mockito.doThrow(new RecursoNoEncontradoException("Factura", 999999L)).when(servicio)
+                .eliminar(999999L);
+
+        mvc.perform(delete("/api/facturas/999999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("999999")));
+    }
+
+    // --- Cambio de estado: PATCH /api/facturas/{id}/estado ---
+
+    @Test
+    void cambioDeEstadoDevuelve200ConLaFilaYPasaElDtoAlServicio() throws Exception {
+        when(servicio.cambiarEstado(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(fila(7, 3L, LocalDate.of(2026, 11, 1), "Juan Servicios", 6534.00, 1, EstadoFactura.EMITIDA));
+
+        mvc.perform(patch("/api/facturas/7/estado").contentType("application/json")
+                        .content("{\"estado\": \"EMITIDA\", \"observaciones\": \"Listo\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("EMITIDA"))
+                .andExpect(jsonPath("$.numeroFactura").value(3));
+
+        ArgumentCaptor<CambioEstadoRequestDTO> captor = ArgumentCaptor.forClass(CambioEstadoRequestDTO.class);
+        verify(servicio).cambiarEstado(org.mockito.ArgumentMatchers.eq(7L), captor.capture());
+        assertThat(captor.getValue().estado()).isEqualTo("EMITIDA");
+        assertThat(captor.getValue().observaciones()).isEqualTo("Listo");
+    }
+
+    @ParameterizedTest(name = "cuerpo {0}")
+    @ValueSource(strings = {"{}", "{\"estado\": \"\"}", "{\"estado\": \"   \"}"})
+    void estadoVacioOAusenteEs400SinTocarElServicio(String cuerpo) throws Exception {
+        mvc.perform(patch("/api/facturas/7/estado").contentType("application/json").content(cuerpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.estado").value("El estado es obligatorio"));
+
+        verifyNoInteractions(servicio);
+    }
+
+    @Test
+    void observacionesDe501EnElCambioDeEstadoSonRechazadas() throws Exception {
+        mvc.perform(patch("/api/facturas/7/estado").contentType("application/json")
+                        .content("{\"estado\": \"EMITIDA\", \"observaciones\": \"" + "o".repeat(501) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.observaciones").exists());
+
         verifyNoInteractions(servicio);
     }
 }
