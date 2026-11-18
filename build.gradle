@@ -57,3 +57,25 @@ tasks.named('bootRun') {
 tasks.named('jar') {
     enabled = false
 }
+
+// Suite de concurrencia contra PostgreSQL, a demanda (no se engancha a test, check ni build: la corrida normal no
+// necesita ningun servidor). Requiere el PostgreSQL local (por defecto el portatil en el puerto 5433):
+//   ./gradlew testPostgres            (opcional: -PpostgresUrl=jdbc:postgresql://localhost:5433/facturacion)
+// El reporte queda separado en build/reports/tests/testPostgres.
+tasks.register('testPostgres', Test) {
+    group = 'verification'
+    description = 'Corre la suite de concurrencia (tag concurrencia) contra PostgreSQL en el puerto 5433.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'concurrencia'
+    }
+    systemProperty 'user.timezone', zonaHoraria
+    systemProperty 'facturacion.pruebas.motor', 'postgres'
+    systemProperty 'facturacion.pruebas.postgres-url',
+            (findProperty('postgresUrl') ?: 'jdbc:postgresql://localhost:5433/facturacion').toString()
+    testLogging {
+        showStandardStreams = true
+        events 'passed', 'failed', 'skipped'
+    }
+}
