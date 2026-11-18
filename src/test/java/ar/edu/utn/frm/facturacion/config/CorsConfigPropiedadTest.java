@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import ar.edu.utn.frm.facturacion.controller.FacturaRestController;
+import ar.edu.utn.frm.facturacion.repository.UsuarioRepository;
 import ar.edu.utn.frm.facturacion.service.FacturaService;
 import java.time.Clock;
 import java.time.Instant;
@@ -38,6 +39,9 @@ class CorsConfigPropiedadTest {
 
     @MockBean
     private FacturaService facturaService;
+
+    @MockBean
+    private UsuarioRepository usuarios;
 
     @Test
     void conLaPropiedadSobrescritaSeAdmiteElNuevoOrigenYSeRechazaElAnterior() throws Exception {
