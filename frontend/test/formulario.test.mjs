@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { iniciarAplicacion } from '../dist/aplicacion.js';
 import { ApiError } from '../dist/services/ApiError.js';
-import { catalogosEjemplo, dialogosFalsos, esperarTareas, fila, montarPagina, servicioFalso, temporizadorManual, ventanaModalFalsa } from '../soporte-pruebas/soporte.mjs';
+import { catalogosEjemplo, dialogosFalsos, esperarHashchange, esperarTareas, fila, montarPagina, servicioFalso, temporizadorManual, ventanaModalFalsa } from '../soporte-pruebas/soporte.mjs';
 
 async function arrancar(auto = {}) {
-  const pagina = montarPagina();
+  const pagina = montarPagina('http://localhost:5173/#/nueva');
   const servicio = servicioFalso({ obtenerCatalogos: catalogosEjemplo(), obtenerFacturas: [], buscarClientes: catalogosEjemplo().clientes, buscarListaPrecioArticulos: catalogosEjemplo().listaPrecioArticulos, ...auto });
   const temporizador = temporizadorManual();
-  const app = iniciarAplicacion({ documento: pagina.documento, servicio, dialogos: dialogosFalsos(), temporizador, ventanaModal: ventanaModalFalsa() });
+  const app = iniciarAplicacion({ documento: pagina.documento, ventana: pagina.ventana, servicio, dialogos: dialogosFalsos(), temporizador, ventanaModal: ventanaModalFalsa() });
   await app.listo;
   const $ = (id) => pagina.documento.getElementById(id);
   const filas = () => [...$('renglones').querySelectorAll('fieldset.renglon')];
@@ -175,15 +175,14 @@ test('Correccion: al guardar con el valor corregido se quitan las marcas y el me
   assert.equal(t.$(idError), null);
 });
 
-test('Alta exitosa: request exacto, anuncia el borrador 15, formulario vacio y recarga con los filtros aplicados', async () => {
+// Etapa 7: antes la prueba esperaba la recarga del listado con los filtros aplicados; ahora el alta exitosa navega al detalle del borrador creado.
+test('Alta exitosa: request exacto, detalle de la factura 15 con el anuncio y formulario vacio', async () => {
   const t = await arrancar({ crearFactura: fila({ id: 15, estado: 'BORRADOR', numeroFactura: null }) });
-  t.$('filtro-estado').value = 'EMITIDA';
-  t.$('form-filtros').requestSubmit();
-  await esperarTareas();
   t.llenarCabecera();
   await t.llenarRenglon(0, { cantidad: '0.5', descripcion: 'a'.repeat(255) });
+  const llegada = esperarHashchange(t.ventana);
   t.enviar();
-  await esperarTareas();
+  await llegada;
   assert.deepEqual(t.servicio.de('crearFactura')[0].args, [
     { condicionIvaId: 2, puntoVentaId: 1, tipoMonedaId: 1, detalles: [{ listaPrecioArticuloId: 1, cantidad: 0.5, descripcion: 'a'.repeat(255) }] },
   ]);
@@ -191,17 +190,40 @@ test('Alta exitosa: request exacto, anuncia el borrador 15, formulario vacio y r
   assert.equal(t.$('punto-venta').value, '');
   assert.equal(t.filas().length, 1);
   assert.equal(t.campo(0, 'cantidad').value, '');
-  assert.deepEqual(t.servicio.de('obtenerFacturas').at(-1).args, [{ estado: 'EMITIDA' }, { pagina: 0, tamanio: 10 }]);
-  assert.equal(t.servicio.de('obtenerFacturas').length, 3);
+  assert.equal(t.ventana.location.hash, '#/factura/15');
+  assert.equal(t.$('pantalla-detalle').hidden, false);
+  assert.deepEqual(t.servicio.de('obtenerFactura')[0].args, [15]);
+  assert.equal(t.servicio.de('obtenerFacturas').length, 0);
+});
+
+test('Guardado que termina fuera de la pantalla: el listado sigue visible y solo se anuncia el borrador 15', async () => {
+  const t = await arrancar();
+  t.llenarCabecera();
+  await t.llenarRenglon(0);
+  t.enviar();
+  const salida = esperarHashchange(t.ventana);
+  t.ventana.location.hash = '#/';
+  await salida;
+  t.servicio.de('crearFactura')[0].resolver(fila({ id: 15, estado: 'BORRADOR', numeroFactura: null }));
+  await esperarTareas();
+  assert.equal(t.ventana.location.hash, '#/');
+  assert.equal(t.$('pantalla-listado').hidden, false);
+  assert.match(t.$('estado').textContent, /borrador 15/);
+  assert.equal(t.servicio.de('obtenerFactura').length, 0);
 });
 
 test('Consumidor Final: el request no incluye clienteId; con cliente elegido si', async () => {
   const t = await arrancar({ crearFactura: fila({ id: 15 }) });
   t.llenarCabecera();
   await t.llenarRenglon(0);
+  const llegada = esperarHashchange(t.ventana);
   t.enviar();
-  await esperarTareas();
+  await llegada;
   assert.equal('clienteId' in t.servicio.de('crearFactura')[0].args[0], false);
+  // Etapa 7: tras guardar se navega al detalle; para el segundo alta se vuelve a #/nueva.
+  const vuelta = esperarHashchange(t.ventana);
+  t.ventana.location.hash = '#/nueva';
+  await vuelta;
   t.llenarCabecera();
   await t.llenarRenglon(0);
   await t.elegirCliente('Ana SA');
@@ -210,8 +232,8 @@ test('Consumidor Final: el request no incluye clienteId; con cliente elegido si'
   assert.equal(t.servicio.de('crearFactura')[1].args[0].clienteId, 2);
 });
 
-test('Bloqueo durante el alta: aria-busy, fieldset y acciones de fila deshabilitados; doble envio ignorado', async () => {
-  const t = await arrancar({ obtenerFacturas: [fila({ id: 6, estado: 'BORRADOR', numeroFactura: null })] });
+test('Bloqueo durante el alta: aria-busy y fieldset deshabilitados; doble envio ignorado', async () => {
+  const t = await arrancar();
   t.llenarCabecera();
   await t.llenarRenglon(0);
   t.enviar();
@@ -219,12 +241,10 @@ test('Bloqueo durante el alta: aria-busy, fieldset y acciones de fila deshabilit
   assert.equal(t.servicio.de('crearFactura').length, 1);
   assert.equal(t.$('form-factura').getAttribute('aria-busy'), 'true');
   assert.equal(t.$('contenido-formulario').disabled, true);
-  assert.ok([...t.$('filas').querySelectorAll('button')].every((b) => b.disabled));
   t.servicio.de('crearFactura')[0].resolver(fila({ id: 15 }));
   await esperarTareas();
   assert.equal(t.$('form-factura').getAttribute('aria-busy'), 'false');
   assert.equal(t.$('contenido-formulario').disabled, false);
-  assert.ok([...t.$('filas').querySelectorAll('button')].every((b) => !b.disabled));
 });
 
 test('Liberacion tras error 400: controles habilitados, aria-busy false y se puede reintentar', async () => {

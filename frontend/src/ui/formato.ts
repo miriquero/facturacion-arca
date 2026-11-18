@@ -23,3 +23,9 @@ export function formatearNumero(n: number | null): string {
 export function formatearDecimal(valor: number): string {
   return DOS_DECIMALES.format(valor);
 }
+
+/** Comprobante `0001-00000004` (punto de venta en cuatro dígitos y número en ocho); `—` si todavía no tiene número. */
+export function formatearComprobante(puntoVenta: number, numero: number | null): string {
+  if (numero === null) return '—';
+  return `${String(puntoVenta).padStart(4, '0')}-${String(numero).padStart(8, '0')}`;
+}

@@ -1,39 +1,23 @@
 import type { FacturaReporteDTO } from '../models/factura.dto.js';
+import { hrefDe } from '../navegacion/rutas.js';
 import { crear, reemplazarHijos } from './dom.js';
 import { formatearFecha, formatearImporte, formatearNumero } from './formato.js';
 
-export type Accion = 'editar' | 'emitir' | 'anular' | 'eliminar';
-
-/** Tabla de facturas, contador y mensaje sin datos. Un único listener delegado en el tbody. */
+/** Tabla de facturas, contador y mensaje sin datos. Cada fila solo navega: «Ver» al detalle e «Imprimir PDF» si está informada. */
 export class Listado {
-  private deshabilitadas = false;
-
   constructor(
     private readonly doc: Document,
     private readonly tbody: HTMLElement,
     private readonly contador: HTMLElement,
     private readonly sinResultados: HTMLElement,
-    onAccion: (accion: Accion, id: number) => void,
     private readonly urlPdf: (id: number) => string,
-  ) {
-    tbody.addEventListener('click', (evento) => {
-      const boton = (evento.target as Element).closest('button[data-accion]');
-      if (!boton || !tbody.contains(boton)) return;
-      onAccion(boton.getAttribute('data-accion') as Accion, Number(boton.getAttribute('data-id')));
-    });
-  }
+  ) {}
 
   /** `total` es la cantidad que cumple los filtros (totalElementos), no las filas de esta página. */
   mostrar(filas: FacturaReporteDTO[], total: number): void {
     reemplazarHijos(this.tbody, filas.map((f) => this.crearFila(f)));
     this.contador.textContent = textoCantidad(total);
     this.sinResultados.hidden = total !== 0;
-    this.deshabilitarAcciones(this.deshabilitadas);
-  }
-
-  deshabilitarAcciones(deshabilitar: boolean): void {
-    this.deshabilitadas = deshabilitar;
-    for (const b of this.tbody.querySelectorAll('button')) b.disabled = deshabilitar;
   }
 
   private crearFila(f: FacturaReporteDTO): HTMLElement {
@@ -56,24 +40,18 @@ export class Listado {
   private celdaAcciones(f: FacturaReporteDTO): HTMLElement {
     const doc = this.doc;
     const td = crear(doc, 'td');
-    const botones = crear(doc, 'div', undefined, { class: 'botones' });
-    const agregar = (accion: Accion, texto: string, objeto: string): void => {
-      const b = crear(doc, 'button', texto, { type: 'button', 'data-accion': accion, 'data-id': String(f.id) });
-      b.appendChild(crear(doc, 'span', ` ${objeto} ${f.id}`, { class: 'visualmente-oculto' }));
-      botones.appendChild(b);
-    };
-    if (f.estado === 'BORRADOR') {
-      agregar('editar', 'Editar', 'borrador');
-      agregar('emitir', 'Emitir', 'borrador');
-      agregar('eliminar', 'Eliminar', 'borrador');
-    } else {
-      // Informada a ARCA (EMITIDA o ANULADA): solo imprimir; anular únicamente si sigue EMITIDA. Nunca editar ni eliminar.
+    const enlaces = crear(doc, 'div', undefined, { class: 'botones' });
+    // El nombre accesible incluye el id de la factura (el texto extra queda visualmente oculto).
+    const ver = crear(doc, 'a', 'Ver', { href: hrefDe({ tipo: 'detalle', id: f.id }) });
+    ver.appendChild(crear(doc, 'span', ` factura ${f.id}`, { class: 'visualmente-oculto' }));
+    enlaces.appendChild(ver);
+    if (f.estado !== 'BORRADOR') {
+      // Informada a ARCA (EMITIDA o ANULADA): se puede imprimir el PDF; el borrador no.
       const imprimir = crear(doc, 'a', 'Imprimir PDF', { href: this.urlPdf(f.id), class: 'enlace-pdf' });
       imprimir.appendChild(crear(doc, 'span', ` factura ${f.id}`, { class: 'visualmente-oculto' }));
-      botones.appendChild(imprimir);
-      if (f.estado === 'EMITIDA') agregar('anular', 'Anular', 'factura');
+      enlaces.appendChild(imprimir);
     }
-    td.appendChild(botones);
+    td.appendChild(enlaces);
     return td;
   }
 }

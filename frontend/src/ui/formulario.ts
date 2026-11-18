@@ -39,7 +39,6 @@ export class Formulario {
   private readonly agregar: HTMLElement;
   private readonly titulo: HTMLElement;
   private readonly guardar: HTMLElement;
-  private readonly cancelar: HTMLElement;
   private articulos: OpcionDTO[] = [];
   private clientes: OpcionDTO[] = [];
   /** Opción lista–artículo elegida en cada renglón (el id va además en data-id de su salida). */
@@ -66,7 +65,6 @@ export class Formulario {
     this.agregar = e('agregar-renglon');
     this.titulo = e('titulo-formulario');
     this.guardar = e('guardar');
-    this.cancelar = e('cancelar-edicion');
 
     this.agregar.addEventListener('click', () => this.agregarRenglon());
     e('elegir-cliente').addEventListener('click', (evento) => {
@@ -303,7 +301,6 @@ export class Formulario {
     this.modoActual = modo;
     this.titulo.textContent = modo.tipo === 'edicion' ? `Editar borrador ${modo.id}` : 'Nuevo borrador';
     this.guardar.textContent = modo.tipo === 'edicion' ? 'Guardar cambios' : 'Guardar borrador';
-    this.cancelar.hidden = modo.tipo !== 'edicion';
   }
 
   /** Precio de catálogo por renglón y total neto estimado sin IVA (informativo). */

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { iniciarAplicacion } from '../dist/aplicacion.js';
 import { ApiError } from '../dist/services/ApiError.js';
-import { catalogosEjemplo, dialogosFalsos, diferido, esperarTareas, fila, montarPagina, pagina, servicioFalso, temporizadorManual, ventanaModalFalsa } from '../soporte-pruebas/soporte.mjs';
+import { arrancarApp, catalogosEjemplo, dialogosFalsos, diferido, esperarHashchange, esperarTareas, fila, montarPagina, pagina, servicioFalso, temporizadorManual, ventanaModalFalsa } from '../soporte-pruebas/soporte.mjs';
 
 const P0 = { pagina: 0, tamanio: 10 };
 
@@ -10,7 +10,7 @@ function arrancar(auto = {}, dialogos = dialogosFalsos()) {
   const pagina = montarPagina();
   const servicio = servicioFalso({ obtenerCatalogos: catalogosEjemplo(), obtenerFacturas: [], buscarClientes: catalogosEjemplo().clientes, ...auto });
   const temporizador = temporizadorManual();
-  const app = iniciarAplicacion({ documento: pagina.documento, servicio, dialogos, temporizador, ventanaModal: ventanaModalFalsa() });
+  const app = iniciarAplicacion({ documento: pagina.documento, ventana: pagina.ventana, servicio, dialogos, temporizador, ventanaModal: ventanaModalFalsa() });
   const $ = (id) => pagina.documento.getElementById(id);
   return { ...pagina, servicio, temporizador, app, $, dialogos };
 }
@@ -387,4 +387,65 @@ test('Cancelar el explorador del filtro conserva el cliente elegido', async () =
   t.$('explorador-cancelar').click();
   await esperarTareas();
   assert.equal(t.$('filtro-cliente').getAttribute('data-id'), '2');
+});
+
+test('Entrada por otra pantalla: catalogos una vez, el listado recien al mostrarse y con la pagina 0 sin filtros', async () => {
+  const t = await arrancarApp({ url: 'http://localhost:5173/#/nueva' });
+  assert.equal(t.servicio.de('obtenerCatalogos').length, 1);
+  assert.equal(t.servicio.de('obtenerFacturas').length, 0);
+  await t.navegar('#/');
+  await esperarTareas();
+  assert.equal(t.servicio.de('obtenerCatalogos').length, 1);
+  assert.equal(t.servicio.de('obtenerFacturas').length, 1);
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[0].args, [{}, { pagina: 0, tamanio: 10 }]);
+});
+
+test('Listado que falla despues de salir de la pantalla: el error tardio no se muestra', async () => {
+  const t = await arrancarApp({ url: 'http://localhost:5173/#/nueva', auto: { obtenerFacturas: null } });
+  await t.navegar('#/');
+  assert.equal(t.servicio.de('obtenerFacturas').length, 1);
+  await t.navegar('#/nueva');
+  t.servicio.de('obtenerFacturas')[0].rechazar(new ApiError(500, 'Error de servidor'));
+  await esperarTareas();
+  assert.equal(t.$('estado').textContent, '');
+});
+
+// ---- Etapa 7: el estado de la consulta se conserva al salir del listado y volver ----
+
+const clientesFalsos = [
+  { id: 1, etiqueta: 'Juan Servicios', valor: null, codigoMoneda: null },
+  { id: 2, etiqueta: 'Ana SA', valor: null, codigoMoneda: null },
+];
+const tresPaginas = (_filtros, solicitud) => pagina([fila({ id: 1 })], { pagina: solicitud.pagina, tamanio: solicitud.tamanio, totalElementos: 25, totalPaginas: 3 });
+
+test('Volver con filtros y pagina: campos intactos y pedido con estado, cliente y pagina vigentes', async () => {
+  const t = await arrancarApp({ auto: { obtenerFacturas: tresPaginas, buscarClientes: clientesFalsos } });
+  await elegirClienteDelFiltro(t, 'Ana SA');
+  t.$('filtro-estado').value = 'EMITIDA';
+  buscar(t);
+  await esperarTareas();
+  t.$('pagina-siguiente').click();
+  await esperarTareas();
+  await t.navegar('#/factura/1');
+  const atras = esperarHashchange(t.ventana);
+  t.ventana.history.back();
+  await atras;
+  assert.equal(t.$('pantalla-listado').hidden, false);
+  assert.equal(t.$('filtro-estado').value, 'EMITIDA');
+  assert.equal(t.$('filtro-cliente').getAttribute('data-id'), '2');
+  const ultima = t.servicio.de('obtenerFacturas').at(-1);
+  assert.deepEqual(ultima.args, [{ estado: 'EMITIDA', clienteId: 2 }, { pagina: 1, tamanio: 10 }]);
+});
+
+test('Filtros editados sin buscar: el campo conserva lo escrito pero el pedido usa los del ultimo resultado', async () => {
+  const t = await arrancarApp({ auto: { obtenerFacturas: tresPaginas } });
+  t.$('filtro-estado').value = 'EMITIDA';
+  buscar(t);
+  await esperarTareas();
+  t.$('filtro-estado').value = 'ANULADA';
+  await t.navegar('#/nueva');
+  await t.navegar('#/');
+  assert.equal(t.$('filtro-estado').value, 'ANULADA');
+  assert.equal(t.servicio.de('obtenerFacturas').length, 3);
+  assert.deepEqual(t.servicio.de('obtenerFacturas').at(-1).args, [{ estado: 'EMITIDA' }, { pagina: 0, tamanio: 10 }]);
 });

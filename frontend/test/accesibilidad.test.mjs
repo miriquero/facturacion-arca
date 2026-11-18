@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { iniciarAplicacion } from '../dist/aplicacion.js';
-import { catalogosEjemplo, dialogosFalsos, esperarTareas, fila, montarPagina, servicioFalso, temporizadorManual, ventanaModalFalsa } from '../soporte-pruebas/soporte.mjs';
+import { arrancarApp, borradorDetallado, catalogosEjemplo, dialogosFalsos, esperarTareas, facturaDetallada, fila, montarPagina, servicioFalso, temporizadorManual, ventanaModalFalsa } from '../soporte-pruebas/soporte.mjs';
 
 const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 const variables = Object.fromEntries([...css.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]));
@@ -48,7 +48,7 @@ async function paginaConDatos() {
     obtenerCatalogos: catalogosEjemplo(),
     obtenerFacturas: [fila({ id: 6, estado: 'BORRADOR', numeroFactura: null }), fila({ id: 1 }), fila({ id: 3, estado: 'ANULADA' })],
   });
-  const app = iniciarAplicacion({ documento: pagina.documento, servicio, dialogos: dialogosFalsos(), temporizador: temporizadorManual() });
+  const app = iniciarAplicacion({ documento: pagina.documento, ventana: pagina.ventana, servicio, dialogos: dialogosFalsos(), temporizador: temporizadorManual() });
   await app.listo;
   pagina.documento.getElementById('agregar-renglon').click();
   await esperarTareas();
@@ -72,10 +72,13 @@ test('pagina con datos: los campos de cantidad se distinguen como renglon 1 y re
   assert.deepEqual(nombres, ['Cantidad (renglón 1)', 'Cantidad (renglón 2)']);
 });
 
-test('pagina con datos: los botones de accion nombran la accion y la factura', async () => {
+// Etapa 7: las filas ya no tienen botones de accion (pasaron al detalle, ver pantalla-detalle.test.mjs); aca se
+// verifica que los enlaces de la fila nombran la accion y la factura.
+test('pagina con datos: los enlaces de fila nombran la accion y la factura y no hay botones en las filas', async () => {
   const doc = await paginaConDatos();
-  const nombres = [...doc.querySelectorAll('#filas button')].map((b) => b.textContent);
-  assert.deepEqual(nombres, ['Editar borrador 6', 'Emitir borrador 6', 'Eliminar borrador 6', 'Anular factura 1']);
+  const nombres = [...doc.querySelectorAll('#filas a')].map((a) => a.textContent);
+  assert.deepEqual(nombres, ['Ver factura 6', 'Ver factura 1', 'Imprimir PDF factura 1', 'Ver factura 3', 'Imprimir PDF factura 3']);
+  assert.equal(doc.querySelectorAll('#filas button').length, 0);
 });
 
 test('pagina con datos: el estado se comunica con texto, no solo con color', async () => {
@@ -83,14 +86,80 @@ test('pagina con datos: el estado se comunica con texto, no solo con color', asy
   assert.deepEqual([...doc.querySelectorAll('#filas tr')].map((r) => r.cells[7].textContent), ['BORRADOR', 'EMITIDA', 'ANULADA']);
 });
 
-test('orden de tabulacion = orden del DOM: filtros, descargas, tabla, formulario, guardar', async () => {
-  const doc = await paginaConDatos();
-  const orden = [...doc.querySelectorAll('a[href], button, input, select, textarea, [tabindex="0"]')].map((e) => e.id || e.getAttribute('name') || e.tagName);
-  const pos = (id) => orden.indexOf(id);
-  assert.ok(pos('filtro-desde') < pos('buscar'));
-  assert.ok(pos('buscar') < pos('descarga-pdf'));
-  assert.ok(pos('descarga-xlsx') < pos('elegir-cliente'));
-  assert.ok(pos('agregar-renglon') < pos('guardar'));
+// Etapa 7: el unico test de orden de tabulacion (filtros, descargas, tabla, formulario, guardar) mezclaba dos pantallas
+// que ya no conviven; se divide en un test por pantalla, sobre los controles que no estan dentro de una seccion hidden.
+const URL_BASE = 'http://localhost:5173/';
+const ACCIONABLES = 'a[href], button, input, select, textarea, [tabindex="0"]';
+/** Controles alcanzables con Tab, en orden del DOM: los que no estan dentro de un elemento hidden. */
+const enOrden = (t) => [...t.documento.querySelectorAll(ACCIONABLES)].filter((e) => e.closest('[hidden]') === null).map((e) => e.id || e.getAttribute('name') || e.textContent.trim());
+const antes = (orden, a, b) => assert.ok(orden.indexOf(a) >= 0 && orden.indexOf(b) >= 0 && orden.indexOf(a) < orden.indexOf(b), `${a} deberia ir antes que ${b}: ${orden}`);
+
+test('orden de tabulacion del listado: barra, filtros, descargas, tabla, paginacion; sin controles del formulario', async () => {
+  const t = await arrancarApp({ auto: { obtenerFacturas: [fila({ id: 6, estado: 'BORRADOR', numeroFactura: null }), fila({ id: 1 })] } });
+  const orden = enOrden(t);
+  antes(orden, 'nav-listado', 'nav-alta');
+  antes(orden, 'nav-alta', 'filtro-numero');
+  antes(orden, 'filtro-desde', 'buscar');
+  antes(orden, 'buscar', 'descarga-pdf');
+  antes(orden, 'descarga-xlsx', 'Ver factura 6');
+  antes(orden, 'Ver factura 1', 'pagina-anterior');
+  for (const id of ['guardar', 'agregar-renglon', 'elegir-cliente', 'cancelar-edicion']) assert.equal(orden.includes(id), false, id);
+});
+
+test('orden de tabulacion del formulario: barra, cabecera, renglones, guardar y cancelar; sin controles del listado', async () => {
+  const t = await arrancarApp({ url: `${URL_BASE}#/nueva` });
+  t.$('agregar-renglon').click();
+  const orden = enOrden(t);
+  antes(orden, 'nav-alta', 'elegir-cliente');
+  antes(orden, 'elegir-cliente', 'condicion-iva');
+  antes(orden, 'fecha-emision', 'observaciones');
+  antes(orden, 'observaciones', 'agregar-renglon');
+  antes(orden, 'agregar-renglon', 'guardar');
+  antes(orden, 'guardar', 'cancelar-edicion');
+  for (const id of ['buscar', 'filtro-numero', 'descarga-pdf', 'pagina-anterior']) assert.equal(orden.includes(id), false, id);
+});
+
+test('orden de tabulacion del detalle: barra y acciones en el orden visual, sin controles del listado ni del formulario', async () => {
+  const t = await arrancarApp({ url: `${URL_BASE}#/factura/6`, auto: { obtenerFactura: borradorDetallado() } });
+  const orden = enOrden(t);
+  antes(orden, 'nav-alta', 'Editar borrador 6');
+  antes(orden, 'Editar borrador 6', 'Emitir borrador 6');
+  antes(orden, 'Eliminar borrador 6', 'Volver al listado');
+  for (const id of ['buscar', 'guardar', 'filtro-numero', 'elegir-cliente']) assert.equal(orden.includes(id), false, id);
+});
+
+test('region de estado unica: el mismo nodo, sin hidden y fuera de las secciones al navegar listado, detalle y alta', async () => {
+  const t = await arrancarApp({ auto: { obtenerFactura: facturaDetallada() } });
+  const region = t.$('estado');
+  for (const fragmento of ['#/factura/1', '#/nueva', '#/']) {
+    await t.navegar(fragmento);
+    assert.equal(t.documento.querySelectorAll('[role="status"]').length, 1, fragmento);
+    assert.equal(t.$('estado'), region, fragmento);
+    assert.equal(region.closest('[hidden]'), null, fragmento);
+    assert.equal(region.closest('section.pantalla'), null, fragmento);
+  }
+});
+
+test('con el detalle visible ningun campo de filtro ni del formulario queda fuera de una seccion hidden', async () => {
+  const t = await arrancarApp({ url: `${URL_BASE}#/factura/1` });
+  const alcanzables = [...t.documento.querySelectorAll('input, select, textarea, button')].filter((e) => e.closest('[hidden]') === null && e.closest('dialog') === null);
+  assert.deepEqual(alcanzables.map((e) => e.id || e.textContent.trim()), ['Anular factura 1']);
+  assert.equal(t.$('form-filtros').closest('[hidden]') !== null, true);
+  assert.equal(t.$('form-factura').closest('[hidden]') !== null, true);
+});
+
+test('accionables nativos sin tabindex positivo en cada pantalla', async () => {
+  const t = await arrancarApp({ auto: { obtenerFacturas: [fila({ id: 6, estado: 'BORRADOR', numeroFactura: null })], obtenerFactura: borradorDetallado() } });
+  for (const fragmento of ['#/', '#/nueva', '#/factura/6']) {
+    await t.navegar(fragmento);
+    for (const el of t.documento.querySelectorAll('button, a, input, select, textarea, [role="button"], [onclick]')) {
+      if (el.closest('[hidden]') !== null) continue;
+      assert.ok(['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName), `${fragmento}: no nativo ${el.tagName}`);
+      if (el.tagName === 'A') assert.ok(el.hasAttribute('href'), `${fragmento}: enlace sin href`);
+      if (el.tagName === 'BUTTON') assert.ok(el.getAttribute('type'), `${fragmento}: boton sin type`);
+    }
+    assert.equal(t.documento.querySelectorAll('[tabindex]:not([tabindex="0"]):not([tabindex="-1"])').length, 0, fragmento);
+  }
 });
 
 // ---- Etapa 6: explorador modal y paginacion ----
@@ -105,7 +174,7 @@ async function paginaConExplorador() {
     buscarClientes: OPCIONES.clientes,
     buscarListaPrecioArticulos: OPCIONES.listaPrecioArticulos,
   });
-  const app = iniciarAplicacion({ documento: pagina.documento, servicio, dialogos: dialogosFalsos(), temporizador: temporizadorManual(), ventanaModal: ventanaModalFalsa() });
+  const app = iniciarAplicacion({ documento: pagina.documento, ventana: pagina.ventana, servicio, dialogos: dialogosFalsos(), temporizador: temporizadorManual(), ventanaModal: ventanaModalFalsa() });
   await app.listo;
   const doc = pagina.documento;
   doc.getElementById('agregar-renglon').click();
@@ -199,7 +268,8 @@ test('estilos del dialogo, la paginacion y el enlace de PDF: solo colores de la 
     return inicio < 0 ? '' : css.slice(css.indexOf('{', inicio) + 1, css.indexOf('}', inicio));
   };
   const dialogo = bloque('dialog#explorador');
-  const pdf = bloque('td .botones a.enlace-pdf');
+  // Etapa 7: la regla pasa de `td .botones a.enlace-pdf` a `td .botones a` para cubrir tambien el enlace Ver.
+  const pdf = bloque('td .botones a');
   for (const regla of [dialogo, pdf]) {
     assert.ok(regla.length > 0, 'regla no encontrada');
     assert.equal(/#[0-9a-fA-F]{3,6}\b|rgb/.test(regla), false, 'color fijo fuera de la paleta');
@@ -209,4 +279,37 @@ test('estilos del dialogo, la paginacion y el enlace de PDF: solo colores de la 
   // los botones de la paginacion y del explorador usan la regla general de button (2,75rem)
   assert.match(css, /button[^{]*\{[^}]*min-height:\s*2\.75rem/);
   assert.match(css, /input, select, textarea \{[^}]*min-height:\s*2\.75rem/);
+});
+
+// ---- Etapa 7: estilos de la navegacion y del detalle ----
+
+const bloqueCss = (selector) => {
+  const inicio = css.indexOf(`${selector} {`);
+  return inicio < 0 ? '' : css.slice(css.indexOf('{', inicio) + 1, css.indexOf('}', inicio));
+};
+
+test('estilos: [hidden] oculta siempre, aunque otra regla fije display', () => {
+  assert.match(bloqueCss('[hidden]'), /display:\s*none\s*!important/);
+});
+
+test('estilos de la barra de navegacion: objetivos de 44 px y pagina actual marcada sin depender solo del color', () => {
+  const enlaces = bloqueCss('nav[aria-label="Principal"] a');
+  const actual = bloqueCss('nav[aria-label="Principal"] a[aria-current="page"]');
+  assert.match(enlaces, /min-height:\s*2\.75rem/);
+  assert.match(enlaces, /min-width:\s*2\.75rem/);
+  assert.match(actual, /text-decoration:\s*underline|border-bottom:\s*[0-9.]+(px|rem)/, 'la pagina actual necesita una marca que no sea solo color');
+  assert.match(actual, /font-weight:\s*(bold|[6-9]00)/);
+});
+
+test('estilos del detalle y de sus enlaces de accion: objetivos de 44 px y solo colores de la paleta', () => {
+  const acciones = bloqueCss('#detalle-acciones a');
+  const datos = bloqueCss('dl.datos');
+  const nav = bloqueCss('nav[aria-label="Principal"] a') + bloqueCss('nav[aria-label="Principal"] a[aria-current="page"]');
+  assert.match(acciones, /min-height:\s*2\.75rem/);
+  assert.match(acciones, /min-width:\s*2\.75rem/);
+  assert.match(datos, /display:\s*grid/);
+  for (const regla of [acciones, datos, nav]) {
+    assert.ok(regla.length > 0, 'regla no encontrada');
+    assert.equal(/#[0-9a-fA-F]{3,6}|rgb/.test(regla), false, 'color fijo fuera de la paleta');
+  }
 });

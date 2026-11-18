@@ -19,7 +19,7 @@ async function arrancar(auto = {}) {
   const pag = montarPagina();
   const servicio = servicioFalso({ obtenerCatalogos: catalogosEjemplo(), obtenerFacturas: paginaDe, ...auto });
   const temporizador = temporizadorManual();
-  const app = iniciarAplicacion({ documento: pag.documento, servicio, dialogos: dialogosFalsos(), temporizador });
+  const app = iniciarAplicacion({ documento: pag.documento, ventana: pag.ventana, servicio, dialogos: dialogosFalsos(), temporizador });
   await app.listo;
   const $ = (id) => pag.documento.getElementById(id);
   const siguiente = () => $('pagina-siguiente');
@@ -38,7 +38,8 @@ async function arrancar(auto = {}) {
     await esperarTareas();
   };
   const ultima = () => servicio.de('obtenerFacturas').at(-1).args;
-  const primerId = () => $('filas').rows[0].querySelector('button')?.getAttribute('data-id') ?? $('filas').rows[0].cells[0].textContent;
+  // Etapa 7: las filas ya no tienen botones; el id sale del enlace Ver (#/factura/{id}).
+  const primerId = () => $('filas').rows[0].querySelector('a[href^="#/factura/"]')?.getAttribute('href').split('/').pop() ?? $('filas').rows[0].cells[0].textContent;
   return { ...pag, servicio, temporizador, app, $, siguiente, anterior, ir, cambiarTamanio, buscar, ultima, primerId };
 }
 

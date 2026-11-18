@@ -8,11 +8,23 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
-    <main>
-      <h1>Facturación ARCA</h1>
+    <header>
+      <p class="marca">Facturación ARCA</p>
+      <nav aria-label="Principal">
+        <ul>
+          <li><a id="nav-listado" href="#/">Facturas</a></li>
+          <li><a id="nav-alta" href="#/nueva">Nueva factura</a></li>
+        </ul>
+      </nav>
+    </header>
 
-      <!-- Región de estado: siempre en el DOM; solo cambia su contenido. -->
-      <div id="estado" role="status" aria-live="polite"></div>
+    <!-- Región de estado: una sola, fuera de las pantallas, siempre en el DOM; solo cambia su contenido. -->
+    <div id="estado" role="status" aria-live="polite"></div>
+
+    <main>
+      <!-- Pantalla del listado: filtros, resultados y paginación. -->
+      <section id="pantalla-listado" class="pantalla" aria-labelledby="titulo-listado">
+      <h1 id="titulo-listado" tabindex="-1">Facturas</h1>
 
       <section aria-labelledby="titulo-filtros">
         <h2 id="titulo-filtros">Consulta de facturas</h2>
@@ -107,9 +119,11 @@
           </div>
         </nav>
       </section>
+      </section>
 
-      <section aria-labelledby="titulo-formulario">
-        <h2 id="titulo-formulario" tabindex="-1">Nuevo borrador</h2>
+      <!-- Pantalla del formulario: alta (#/nueva) y edición (#/factura/{id}/editar). -->
+      <section id="pantalla-formulario" class="pantalla" aria-labelledby="titulo-formulario" hidden>
+        <h1 id="titulo-formulario" tabindex="-1">Nuevo borrador</h1>
         <form id="form-factura" novalidate aria-busy="false">
           <fieldset id="contenido-formulario">
             <legend>Datos del borrador</legend>
@@ -159,10 +173,17 @@
 
             <div class="botones">
               <button type="submit" id="guardar">Guardar borrador</button>
-              <button type="button" id="cancelar-edicion" hidden>Cancelar edición</button>
+              <button type="button" id="cancelar-edicion">Cancelar</button>
             </div>
           </fieldset>
         </form>
+      </section>
+
+      <!-- Pantalla de detalle: el contenido se arma con nodos en cada carga. -->
+      <section id="pantalla-detalle" class="pantalla" aria-labelledby="titulo-detalle" aria-busy="false" hidden>
+        <h1 id="titulo-detalle" tabindex="-1">Factura</h1>
+        <div id="detalle-acciones" class="botones"></div>
+        <div id="detalle-contenido"></div>
       </section>
     </main>
 

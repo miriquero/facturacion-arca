@@ -85,6 +85,11 @@ export class Explorador {
     });
   }
 
+  /** Cierra la ventana desde afuera (al salir de la pantalla); equivale a cancelar. */
+  cerrar(): void {
+    this.terminar(null);
+  }
+
   private terminar(opcion: OpcionDTO | null): void {
     const resolver = this.resolver;
     if (resolver === null) return;
