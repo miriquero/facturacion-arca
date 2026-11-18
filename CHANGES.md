@@ -95,7 +95,7 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
 ## FASE 1 — Fundaciones (Semana 1, sin nota)
 
 ### [C-01] `etapa-0-puesta-en-marcha`
-- **Estado**: `[x]` archivado 2026-11-11 (`openspec/changes/archive/2026-11-11-etapa-0-puesta-en-marcha`); verificación PostgreSQL 16 pospuesta a antes de C-05
+- **Estado**: `[x]` archivado 2026-11-11 (`openspec/changes/archive/2026-11-11-etapa-0-puesta-en-marcha`); verificación de arranque y persistencia con PostgreSQL 16.9 portátil (puerto 5433) hecha el 2026-11-17; la concurrencia se prueba en C-05
 - **Scope**:
   - Proyecto Gradle (wrapper 8.10.2 versionado), `facturacion-arca`, grupo `ar.edu.utn.frm`, paquete base `ar.edu.utn.frm.facturacion`; Spring Boot 3.3.5, Java 17 (toolchain), starters Web, Data JPA, Validation, Lombok, H2, PostgreSQL, test; OpenPDF 2.0.3 y Apache POI 5.3.0 declarados (US-001).
   - Paquetes vacíos: `model, dto, repository, service, controller, exception, config, report`.
@@ -188,7 +188,7 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
   - `knowledge-base/10_preguntas_abiertas.md` IN-01, IN-03 (códigos HTTP dudosos)
 
 ### [C-05] `etapa-4-escritura-estados-concurrencia`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` archivado 2026-11-18 (503 pruebas en verde con JDK 17; concurrencia verificada en H2 y PostgreSQL 16.9; IN-01 e IN-03 pendientes de confirmar con el docente)
 - **Scope**:
   - `POST /api/facturas` → 201 + `Location` + `FacturaReporteDTO`; borrador sin número ni CAE; cliente opcional; fecha por defecto hoy; precio tomado de `ListaPrecioArticulo`; importes calculados en servidor (US-401).
   - `PUT /api/facturas/{id}`: reemplaza cabecera y detalles de un BORRADOR vaciando la colección administrada; recalcula; auditoría de modificación; límites 255/256 de descripción; 409 si no es BORRADOR; 404 si no existe (US-402).
