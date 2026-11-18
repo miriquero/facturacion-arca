@@ -5,12 +5,12 @@ import ar.edu.utn.frm.facturacion.dto.FacturaDetalladaDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaFiltrosDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaReporteDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaRequestDTO;
+import ar.edu.utn.frm.facturacion.dto.PaginaDTO;
 import ar.edu.utn.frm.facturacion.report.ArchivoReporte;
 import ar.edu.utn.frm.facturacion.service.FacturaService;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.time.LocalDate;
-import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -38,18 +38,43 @@ public class FacturaRestController {
         this.facturaService = facturaService;
     }
 
+    /**
+     * Listado paginado con filtros. {@code pagina} (base 0, por defecto 0) y {@code tamanio} (por defecto 10, máximo
+     * 100) se validan en el servicio; {@code informada} llega como texto para admitir solo {@code true} y
+     * {@code false}.
+     */
     @GetMapping
-    public ResponseEntity<List<FacturaReporteDTO>> listar(
+    public ResponseEntity<PaginaDTO<FacturaReporteDTO>> listar(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaDesde,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaHasta,
             @RequestParam(required = false) String estado,
-            @RequestParam(required = false) Double montoMinimo) {
-        return ResponseEntity.ok(facturaService.listar(new FacturaFiltrosDTO(fechaDesde, fechaHasta, estado, montoMinimo)));
+            @RequestParam(required = false) Double montoMinimo,
+            @RequestParam(required = false) Long numero,
+            @RequestParam(required = false) Long clienteId,
+            @RequestParam(required = false) String informada,
+            @RequestParam(required = false) Integer pagina,
+            @RequestParam(required = false) Integer tamanio) {
+        return ResponseEntity.ok(facturaService.listar(new FacturaFiltrosDTO(fechaDesde, fechaHasta, estado,
+                montoMinimo, numero, clienteId, informada), pagina, tamanio));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<FacturaDetalladaDTO> detalle(@PathVariable Long id) {
         return ResponseEntity.ok(facturaService.obtenerDetalle(id));
+    }
+
+    /**
+     * PDF del comprobante de una factura informada (EMITIDA o ANULADA). Ruta hija del recurso: no mezcla el
+     * comprobante con el listado ni con el reporte.
+     */
+    @GetMapping("/{id}/pdf")
+    public ResponseEntity<byte[]> pdf(@PathVariable Long id) {
+        ArchivoReporte archivo = facturaService.generarComprobante(id);
+        return ResponseEntity.ok()
+                .contentType(archivo.tipo())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(archivo.nombre()).build().toString())
+                .body(archivo.contenido());
     }
 
     /**
@@ -62,9 +87,12 @@ public class FacturaRestController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaDesde,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaHasta,
             @RequestParam(required = false) String estado,
-            @RequestParam(required = false) Double montoMinimo) {
-        ArchivoReporte archivo = facturaService.generarReporte(
-                new FacturaFiltrosDTO(fechaDesde, fechaHasta, estado, montoMinimo), formato);
+            @RequestParam(required = false) Double montoMinimo,
+            @RequestParam(required = false) Long numero,
+            @RequestParam(required = false) Long clienteId,
+            @RequestParam(required = false) String informada) {
+        ArchivoReporte archivo = facturaService.generarReporte(new FacturaFiltrosDTO(fechaDesde, fechaHasta, estado,
+                montoMinimo, numero, clienteId, informada), formato);
         return ResponseEntity.ok()
                 .contentType(archivo.tipo())
                 .header(HttpHeaders.CONTENT_DISPOSITION,

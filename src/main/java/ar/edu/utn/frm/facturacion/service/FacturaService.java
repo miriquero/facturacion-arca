@@ -5,6 +5,8 @@ import ar.edu.utn.frm.facturacion.dto.FacturaDetalleDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaFiltrosDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaReporteDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaRequestDTO;
+import ar.edu.utn.frm.facturacion.dto.PaginaDTO;
+import ar.edu.utn.frm.facturacion.dto.SolicitudPagina;
 import ar.edu.utn.frm.facturacion.config.FacturacionProperties;
 import ar.edu.utn.frm.facturacion.dto.CambioEstadoRequestDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaDetalleRequestDTO;
@@ -38,6 +40,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.List;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -293,8 +296,16 @@ public class FacturaService {
                 factura.getTipoMoneda().getCodigoAfip());
     }
 
-    public List<FacturaReporteDTO> listar(FacturaFiltrosDTO filtros) {
-        return facturaRepository.buscarReporte(FiltroFacturas.desde(filtros));
+    /**
+     * Listado paginado. Valida filtros y página (400) antes de consultar; la página y el total son dos consultas
+     * con el mismo filtro (el conteo no une renglones: ver {@code FacturaReporteRepositoryImpl}).
+     */
+    public PaginaDTO<FacturaReporteDTO> listar(FacturaFiltrosDTO filtros, Integer pagina, Integer tamanio) {
+        FiltroFacturas filtro = FiltroFacturas.desde(filtros);
+        SolicitudPagina solicitud = SolicitudPagina.de(pagina, tamanio);
+        List<FacturaReporteDTO> items = facturaRepository.buscarPagina(filtro, solicitud.desplazamiento(),
+                solicitud.tamanio());
+        return PaginaDTO.de(items, solicitud, facturaRepository.contar(filtro));
     }
 
     /**
@@ -317,6 +328,7 @@ public class FacturaService {
                 factura.getEstado().name(),
                 cliente == null ? null : cliente.getId(),
                 cliente == null ? CONSUMIDOR_FINAL : cliente.getDenominacion(),
+                cliente == null ? null : cliente.getCuitCuil(),
                 factura.getCondicionIva().getId(),
                 factura.getCondicionIva().getDenominacion(),
                 factura.getPuntoVenta().getId(),
@@ -348,6 +360,21 @@ public class FacturaService {
                 renglon.getImporteNeto(),
                 renglon.getImporteIva(),
                 renglon.getImporteSubtotal());
+    }
+
+    /**
+     * PDF del comprobante de una factura informada (EMITIDA o ANULADA). Todo el detalle se arma dentro de esta
+     * transacción de solo lectura: 404 si no existe y 409 si es un BORRADOR (no fue informada a ARCA).
+     */
+    public ArchivoReporte generarComprobante(Long id) {
+        FacturaDetalladaDTO detalle = obtenerDetalle(id);
+        if (EstadoFactura.BORRADOR.name().equals(detalle.estado())) {
+            throw new ReglaNegocioException("La factura " + id + " está en BORRADOR: no fue informada a ARCA; "
+                    + "emitila para imprimirla");
+        }
+        byte[] contenido = reporteService.generarComprobante(detalle);
+        String nombre = String.format("factura-%04d-%08d.pdf", detalle.puntoVentaNumero(), detalle.numero());
+        return new ArchivoReporte(nombre, MediaType.APPLICATION_PDF, contenido);
     }
 
     /**

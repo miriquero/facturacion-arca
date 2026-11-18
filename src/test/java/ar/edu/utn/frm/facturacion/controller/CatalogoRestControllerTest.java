@@ -50,10 +50,10 @@ class CatalogoRestControllerTest {
     private void simular(String ruta) {
         switch (ruta) {
             case "puntos-venta" -> when(servicio.puntosVenta()).thenReturn(OPCIONES);
-            case "clientes" -> when(servicio.clientes()).thenReturn(OPCIONES);
+            case "clientes" -> when(servicio.clientes(org.mockito.ArgumentMatchers.any())).thenReturn(OPCIONES);
             case "condiciones-iva" -> when(servicio.condicionesIva()).thenReturn(OPCIONES);
             case "tipos-moneda" -> when(servicio.tiposMoneda()).thenReturn(OPCIONES);
-            case "lista-precio-articulos" -> when(servicio.listaPrecioArticulos()).thenReturn(OPCIONES);
+            case "lista-precio-articulos" -> when(servicio.listaPrecioArticulos(org.mockito.ArgumentMatchers.any())).thenReturn(OPCIONES);
             default -> throw new IllegalArgumentException(ruta);
         }
     }

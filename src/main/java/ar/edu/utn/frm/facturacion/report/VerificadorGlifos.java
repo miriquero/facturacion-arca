@@ -37,6 +37,23 @@ final class VerificadorGlifos {
         }
     }
 
+    /** Dato impreso en el comprobante: su nombre (para el mensaje) y su texto. */
+    record DatoImpreso(String nombre, String texto) {
+    }
+
+    /** Verifica los datos del comprobante; lanza ante el primer carácter sin glifo, nombrando el dato. */
+    void verificarDatos(List<DatoImpreso> datos) {
+        for (DatoImpreso dato : datos) {
+            for (int i = 0; i < dato.texto().length(); ) {
+                int codePoint = dato.texto().codePointAt(i);
+                i += Character.charCount(codePoint);
+                if (codePoint != SALTO_DE_LINEA && !fuente.charExists(codePoint)) {
+                    throw new GlifoNoSoportadoException(codePoint, dato.nombre());
+                }
+            }
+        }
+    }
+
     private void verificar(String texto, String campo, int fila) {
         for (int i = 0; i < texto.length(); ) {
             int codePoint = texto.codePointAt(i);

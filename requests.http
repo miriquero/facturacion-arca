@@ -31,7 +31,7 @@ GET {{base}}/api/facturas?estado=%20emitida%20
 ### Estado vacío: se trata como ausente, 200 con todas
 GET {{base}}/api/facturas?estado=
 
-### Sin resultados: 200 con []  (una consulta vacía no es un 404)
+### Sin resultados: 200 con items [] y totalElementos 0  (una consulta vacía no es un 404)
 GET {{base}}/api/facturas?montoMinimo=999999999
 
 ### Mínimo negativo: válido, 200 con todas
@@ -49,9 +49,65 @@ GET {{base}}/api/facturas?montoMinimo=NaN
 ### Fecha mal formada: 400 problem+json que nombra fechaDesde y el formato yyyy-MM-dd
 GET {{base}}/api/facturas?fechaDesde=05/11/2026
 
+### ---------------------------------------------------------------- Etapa 6: listado paginado y filtros nuevos
+### El listado devuelve un sobre {items, pagina, tamanio, totalElementos, totalPaginas} (CAMBIO respecto de la etapa 3:
+### antes era un arreglo). pagina empieza en 0 (por defecto 0); tamanio por defecto 10, entre 1 y 100.
+### Filtros nuevos: numero (>= 1, de cualquier punto de venta), clienteId, informada (true = con CAE, false = sin CAE).
+
+### Primera página de tamaño 2 (con el DataLoader: totalElementos 6, totalPaginas 3)
+GET {{base}}/api/facturas?pagina=0&tamanio=2
+
+### Segunda página de tamaño 2: las filas 3.ª y 4.ª del orden fecha descendente
+GET {{base}}/api/facturas?pagina=1&tamanio=2
+
+### Página posterior a la última: 200 con items [] y el total real
+GET {{base}}/api/facturas?pagina=9&tamanio=2
+
+### Por número: 200 con las facturas número 1 de todos los puntos de venta
+GET {{base}}/api/facturas?numero=1
+
+### Por cliente (1 = Juan Servicios): 200 solo con las de ese cliente
+GET {{base}}/api/facturas?clienteId=1
+
+### Por cliente inexistente: 200 con items []
+GET {{base}}/api/facturas?clienteId=999999
+
+### Informadas (con CAE: EMITIDA y ANULADA), primera página de tamaño 2
+GET {{base}}/api/facturas?pagina=0&tamanio=2&informada=true
+
+### No informadas (sin CAE: borradores); el valor se normaliza (%20FALSE%20)
+GET {{base}}/api/facturas?informada=%20FALSE%20
+
+### Combinado: informadas del cliente 1 desde una fecha
+GET {{base}}/api/facturas?clienteId=1&informada=true&fechaDesde=2020-01-01
+
+### Contradicción (BORRADOR + informada): 200 con items []
+GET {{base}}/api/facturas?estado=BORRADOR&informada=true
+
+### tamanio fuera de rango: 400 problem+json que nombra tamanio y el máximo 100
+GET {{base}}/api/facturas?tamanio=101
+
+### pagina negativa: 400 problem+json que nombra pagina
+GET {{base}}/api/facturas?pagina=-1
+
+### tamanio no numérico: 400 problem+json que nombra el parámetro tamanio
+GET {{base}}/api/facturas?tamanio=diez
+
+### informada inválida: 400 problem+json que menciona informada, true y false
+GET {{base}}/api/facturas?informada=si
+
+### numero inválido: 400 problem+json que nombra numero
+GET {{base}}/api/facturas?numero=0
+
+### Reporte con los filtros nuevos (ignora pagina y tamanio): TXT con las informadas del cliente 1
+GET {{base}}/api/facturas/reporte?formato=txt&clienteId=1&informada=true&pagina=1&tamanio=1
+
+### Reporte con informada inválida: 400 sin archivo
+GET {{base}}/api/facturas/reporte?formato=txt&informada=si
+
 ### ---------------------------------------------------------------- Detalle
 
-### Detalle de una factura existente (ajustar el id al listado): 200 con cabecera y renglones
+### Detalle de una factura existente (ajustar el id al listado): 200 con cabecera, clienteCuitCuil y renglones
 GET {{base}}/api/facturas/1
 
 ### Factura inexistente: 404 problem+json que menciona el id
@@ -59,6 +115,27 @@ GET {{base}}/api/facturas/999999
 
 ### Id no numérico: 400 problem+json que menciona el parámetro id
 GET {{base}}/api/facturas/abc
+
+### ---------------------------------------------------------------- PDF de una factura (etapa 6)
+
+### Factura EMITIDA (id 1): 200 application/pdf, attachment; filename="factura-0001-00000001.pdf"
+GET {{base}}/api/facturas/1/pdf
+
+### Factura ANULADA (id 3): 200 con el comprobante marcado ANULADA
+GET {{base}}/api/facturas/3/pdf
+
+### BORRADOR (id 5): 409 problem+json "no fue informada a ARCA", sin Content-Disposition
+GET {{base}}/api/facturas/5/pdf
+
+### Factura inexistente: 404 que menciona el id
+GET {{base}}/api/facturas/999999/pdf
+
+### Id no numérico: 400 que menciona id
+GET {{base}}/api/facturas/abc/pdf
+
+### Desde el origen del frontend: 200 y Access-Control-Expose-Headers con Content-Disposition
+GET {{base}}/api/facturas/1/pdf
+Origin: http://localhost:5173
 
 ### ---------------------------------------------------------------- Reporte (mismos filtros que el listado)
 
@@ -102,6 +179,27 @@ GET {{base}}/api/catalogos/tipos-moneda
 
 ### Artículos por lista de precios (el id es el de la oferta, valor es el precio de venta)
 GET {{base}}/api/catalogos/lista-precio-articulos
+
+### Búsqueda de clientes por parte de la denominación (sin distinguir mayúsculas; %20 = espacios exteriores, se ignoran)
+GET {{base}}/api/catalogos/clientes?q=%20juan%20
+
+### Búsqueda de clientes por parte del CUIT
+GET {{base}}/api/catalogos/clientes?q=12345
+
+### Sin coincidencias: 200 con []
+GET {{base}}/api/catalogos/clientes?q=zzz
+
+### El % es texto literal (%25): 200 con [] si ningún cliente lo contiene
+GET {{base}}/api/catalogos/clientes?q=%25
+
+### q de más de 100 caracteres: 400 problem+json que menciona q y 100
+GET {{base}}/api/catalogos/clientes?q=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+### Búsqueda de artículos por denominación, código de artículo o código de lista (con el DataLoader solo existe la lista GENERAL: q=general trae las 3)
+GET {{base}}/api/catalogos/lista-precio-articulos?q=martillo
+
+###
+GET {{base}}/api/catalogos/lista-precio-articulos?q=hdmi
 
 ### Alta en un catálogo: 405 problem+json (no hay CRUD de catálogos)
 POST {{base}}/api/catalogos/clientes

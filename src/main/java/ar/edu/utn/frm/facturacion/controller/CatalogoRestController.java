@@ -5,6 +5,7 @@ import ar.edu.utn.frm.facturacion.service.CatalogoService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Catálogos de solo lectura para las listas desplegables del frontend. No hay altas, cambios ni bajas. */
@@ -24,8 +25,8 @@ public class CatalogoRestController {
     }
 
     @GetMapping("/clientes")
-    public List<OpcionDTO> clientes() {
-        return catalogoService.clientes();
+    public List<OpcionDTO> clientes(@RequestParam(required = false) String q) {
+        return catalogoService.clientes(q);
     }
 
     @GetMapping("/condiciones-iva")
@@ -39,7 +40,7 @@ public class CatalogoRestController {
     }
 
     @GetMapping("/lista-precio-articulos")
-    public List<OpcionDTO> listaPrecioArticulos() {
-        return catalogoService.listaPrecioArticulos();
+    public List<OpcionDTO> listaPrecioArticulos(@RequestParam(required = false) String q) {
+        return catalogoService.listaPrecioArticulos(q);
     }
 }

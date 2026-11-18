@@ -14,19 +14,13 @@ import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.time.Clock;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -36,7 +30,7 @@ import java.util.Map;
  */
 final class ReportePdf {
 
-    static final String RUTA_FUENTE = "fonts/NotoSansCJKsc-Regular.otf";
+    static final String RUTA_FUENTE = FuentePdf.RUTA_FUENTE;
 
     private static final ZoneId ZONA_REPORTE = ZoneId.of("America/Argentina/Buenos_Aires");
     private static final DateTimeFormatter FORMATO_GENERACION = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
@@ -48,16 +42,15 @@ final class ReportePdf {
     private static final int MARGEN = 36;
 
     private final Clock reloj;
-    private final String rutaFuente;
-    private volatile BaseFont fuenteBase;
+    private final FuentePdf fuentePdf;
 
-    ReportePdf(Clock reloj, String rutaFuente) {
+    ReportePdf(Clock reloj, FuentePdf fuentePdf) {
         this.reloj = reloj;
-        this.rutaFuente = rutaFuente;
+        this.fuentePdf = fuentePdf;
     }
 
     byte[] generar(List<FacturaReporteDTO> filas) {
-        BaseFont base = fuente();
+        BaseFont base = fuentePdf.fuente();
         String generado = ZonedDateTime.ofInstant(reloj.instant(), ZONA_REPORTE).format(FORMATO_GENERACION);
         String informacion = "Generado: " + generado + " (hora de Argentina) — Registros: " + filas.size();
         List<String> textosFijos = new ArrayList<>(ColumnasReporte.ENCABEZADOS);
@@ -142,38 +135,7 @@ final class ReportePdf {
         return totales;
     }
 
-    /** Importe con separador de miles y coma decimal (es-AR), sin aritmética de punto flotante. */
     private static String importe(BigDecimal valor) {
-        DecimalFormat formato = new DecimalFormat("#,##0.00", DecimalFormatSymbols.getInstance(
-                Locale.forLanguageTag("es-AR")));
-        return formato.format(valor.setScale(2, RoundingMode.HALF_UP));
-    }
-
-    private BaseFont fuente() {
-        BaseFont base = fuenteBase;
-        if (base == null) {
-            synchronized (this) {
-                base = fuenteBase;
-                if (base == null) {
-                    base = cargarFuente();
-                    fuenteBase = base;
-                }
-            }
-        }
-        return base;
-    }
-
-    private BaseFont cargarFuente() {
-        try (InputStream entrada = ReportePdf.class.getClassLoader().getResourceAsStream(rutaFuente)) {
-            if (entrada == null) {
-                throw new IllegalStateException("No se encontró la fuente " + rutaFuente
-                        + " en el classpath; el PDF la necesita (ver README, Etapa 2)");
-            }
-            byte[] bytes = entrada.readAllBytes();
-            String nombre = rutaFuente.substring(rutaFuente.lastIndexOf('/') + 1);
-            return BaseFont.createFont(nombre, BaseFont.IDENTITY_H, BaseFont.EMBEDDED, true, bytes, null);
-        } catch (IOException | DocumentException e) {
-            throw new IllegalStateException("No se pudo cargar la fuente " + rutaFuente, e);
-        }
+        return FormatoImporte.importe(valor);
     }
 }

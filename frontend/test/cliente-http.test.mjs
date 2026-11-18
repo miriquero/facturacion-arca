@@ -4,17 +4,19 @@ import { FacturaService, consultaFiltros } from '../dist/services/FacturaService
 import { ApiError } from '../dist/services/ApiError.js';
 import { fetchFalso, respuesta } from '../soporte-pruebas/soporte.mjs';
 
+const P0 = { pagina: 0, tamanio: 10 };
+
 test('Base configurada: el listado se pide a la URL base del meta', async () => {
   const f = fetchFalso();
-  await new FacturaService('http://127.0.0.1:9090/api', f).obtenerFacturas({});
+  await new FacturaService('http://127.0.0.1:9090/api', f).obtenerFacturas({}, P0);
   assert.equal(f.llamadas.length, 1);
-  assert.equal(f.llamadas[0].url, 'http://127.0.0.1:9090/api/facturas');
+  assert.equal(f.llamadas[0].url, 'http://127.0.0.1:9090/api/facturas?pagina=0&tamanio=10');
 });
 
 test('Base con barra final: sin doble barra', async () => {
   const f = fetchFalso();
-  await new FacturaService('http://localhost:8080/api/', f).obtenerFacturas({});
-  assert.equal(f.llamadas[0].url, 'http://localhost:8080/api/facturas');
+  await new FacturaService('http://localhost:8080/api/', f).obtenerFacturas({}, P0);
+  assert.equal(f.llamadas[0].url, 'http://localhost:8080/api/facturas?pagina=0&tamanio=10');
 });
 
 test('Encabezados: X-Usuario en lectura y en DELETE; sin Content-Type sin cuerpo', async () => {
@@ -42,23 +44,23 @@ test('Encabezados: Content-Type application/json solo con cuerpo (alta)', async 
   assert.equal(init.body, JSON.stringify(req));
 });
 
-test('consultaFiltros: sin filtros no hay "?"', async () => {
+test('consultaFiltros: sin filtros solo viajan pagina y tamanio', async () => {
   const f = fetchFalso();
-  await new FacturaService('http://x/api', f).obtenerFacturas({});
-  assert.equal(f.llamadas[0].url, 'http://x/api/facturas');
+  await new FacturaService('http://x/api', f).obtenerFacturas({}, P0);
+  assert.equal(f.llamadas[0].url, 'http://x/api/facturas?pagina=0&tamanio=10');
 });
 
 test('consultaFiltros: filtros combinados, montoMinimo=0 presente y sin fechaHasta', async () => {
   const f = fetchFalso();
-  await new FacturaService('http://x/api', f).obtenerFacturas({ fechaDesde: '2026-11-01', estado: 'EMITIDA', montoMinimo: 0 });
-  assert.equal(f.llamadas[0].url, 'http://x/api/facturas?fechaDesde=2026-11-01&estado=EMITIDA&montoMinimo=0');
+  await new FacturaService('http://x/api', f).obtenerFacturas({ fechaDesde: '2026-11-01', estado: 'EMITIDA', montoMinimo: 0 }, P0);
+  assert.equal(f.llamadas[0].url, 'http://x/api/facturas?fechaDesde=2026-11-01&estado=EMITIDA&montoMinimo=0&pagina=0&tamanio=10');
   assert.ok(!f.llamadas[0].url.includes('fechaHasta'));
 });
 
 test('consultaFiltros: cadena vacia omitida', async () => {
   const f = fetchFalso();
-  await new FacturaService('http://x/api', f).obtenerFacturas({ fechaDesde: '', fechaHasta: '2026-12-31', estado: '' });
-  assert.equal(f.llamadas[0].url, 'http://x/api/facturas?fechaHasta=2026-12-31');
+  await new FacturaService('http://x/api', f).obtenerFacturas({ fechaDesde: '', fechaHasta: '2026-12-31', estado: '' }, P0);
+  assert.equal(f.llamadas[0].url, 'http://x/api/facturas?fechaHasta=2026-12-31&pagina=0&tamanio=10');
 });
 
 const REQ = { condicionIvaId: 2, puntoVentaId: 1, tipoMonedaId: 1, detalles: [{ listaPrecioArticuloId: 1, cantidad: 1 }] };
@@ -191,7 +193,7 @@ test('ApiError: cuerpo JSON que no es objeto se trata como ilegible', async () =
 
 test('falla de red: ApiError estado 0 con la URL base en el mensaje', async () => {
   const f = async () => { throw new TypeError('Failed to fetch'); };
-  const e = await rechazo(new FacturaService('http://127.0.0.1:9/api', f).obtenerFacturas({}));
+  const e = await rechazo(new FacturaService('http://127.0.0.1:9/api', f).obtenerFacturas({}, P0));
   assert.ok(e instanceof ApiError);
   assert.equal(e.status, 0);
   assert.match(e.message, /http:\/\/127\.0\.0\.1:9\/api/);
@@ -209,4 +211,69 @@ test('Request sin precios ni importes en el JSON enviado', async () => {
     assert.ok(!enviado.includes(clave), `no debe enviarse ${clave}`);
   }
   assert.ok(enviado.includes('listaPrecioArticuloId'));
+});
+
+// ---- Etapa 6: listado paginado, filtros nuevos, busqueda de catalogos y PDF ----
+
+const PAGINA_45 = { items: [{ id: 1 }], pagina: 2, tamanio: 20, totalElementos: 45, totalPaginas: 3 };
+
+test('Listado paginado: pagina 2 tamanio 20 con estado, y devuelve el sobre sin transformarlo', async () => {
+  const f = fetchFalso(() => respuesta(200, PAGINA_45));
+  const resultado = await new FacturaService('http://x/api', f).obtenerFacturas({ estado: 'EMITIDA' }, { pagina: 2, tamanio: 20 });
+  assert.equal(f.llamadas[0].url, 'http://x/api/facturas?estado=EMITIDA&pagina=2&tamanio=20');
+  assert.deepEqual(resultado, PAGINA_45);
+});
+
+test('Filtros combinados con numero, clienteId e informada; sin fechaHasta', async () => {
+  const f = fetchFalso();
+  const filtros = { fechaDesde: '2026-11-01', estado: 'EMITIDA', montoMinimo: 0, numero: 4, clienteId: 2, informada: 'true' };
+  await new FacturaService('http://x/api', f).obtenerFacturas(filtros, P0);
+  const params = new URL(f.llamadas[0].url).searchParams;
+  for (const [clave, valor] of Object.entries({ fechaDesde: '2026-11-01', estado: 'EMITIDA', montoMinimo: '0', numero: '4', clienteId: '2', informada: 'true' })) {
+    assert.equal(params.get(clave), valor, clave);
+  }
+  assert.equal(params.has('fechaHasta'), false);
+});
+
+test('Informada false se envia (no es un valor vacio)', async () => {
+  const f = fetchFalso();
+  await new FacturaService('http://x/api', f).obtenerFacturas({ informada: 'false' }, P0);
+  assert.equal(f.llamadas[0].url, 'http://x/api/facturas?informada=false&pagina=0&tamanio=10');
+});
+
+test('urlReporte xlsx con estado e informada: sin pagina ni tamanio', () => {
+  const s = new FacturaService('http://x/api', fetchFalso());
+  assert.equal(s.urlReporte({ estado: 'EMITIDA', informada: 'true' }, 'xlsx'), 'http://x/api/facturas/reporte?formato=xlsx&estado=EMITIDA&informada=true');
+});
+
+test('urlReporte txt sin filtros: solo formato, ni filtros ni paginacion', () => {
+  const url = new URL(new FacturaService('http://x/api', fetchFalso()).urlReporte({}, 'txt'));
+  assert.deepEqual([...url.searchParams.keys()], ['formato']);
+});
+
+test('buscarClientes con acentos y &: q codificado como parametro de URL', async () => {
+  const f = fetchFalso();
+  const opciones = [{ id: 2, etiqueta: 'Ñandú & Cía', valor: null, codigoMoneda: null }];
+  const g = fetchFalso(() => respuesta(200, opciones));
+  const resultado = await new FacturaService('http://x/api', g).buscarClientes('Ñandú & Cía');
+  assert.equal(g.llamadas[0].url, 'http://x/api/catalogos/clientes?q=%C3%91and%C3%BA+%26+C%C3%ADa');
+  assert.equal(g.llamadas[0].init.method, 'GET');
+  assert.deepEqual(resultado, opciones);
+});
+
+test('buscarListaPrecioArticulos con texto en blanco: sin "?"', async () => {
+  const f = fetchFalso();
+  await new FacturaService('http://x/api', f).buscarListaPrecioArticulos('   ');
+  assert.equal(f.llamadas[0].url, 'http://x/api/catalogos/lista-precio-articulos');
+});
+
+test('buscarListaPrecioArticulos con texto: q recortado y codificado', async () => {
+  const f = fetchFalso();
+  await new FacturaService('http://x/api', f).buscarListaPrecioArticulos(' martillo ');
+  assert.equal(f.llamadas[0].url, 'http://x/api/catalogos/lista-precio-articulos?q=martillo');
+});
+
+test('urlPdfFactura(7) sobre la base configurada (con y sin barra final)', () => {
+  assert.equal(new FacturaService('http://localhost:8080/api', fetchFalso()).urlPdfFactura(7), 'http://localhost:8080/api/facturas/7/pdf');
+  assert.equal(new FacturaService('http://localhost:8080/api/', fetchFalso()).urlPdfFactura(12), 'http://localhost:8080/api/facturas/12/pdf');
 });

@@ -10,6 +10,8 @@ import type {
   FacturaReporteDTO,
   FacturaRequestDTO,
   OpcionDTO,
+  PaginaDTO,
+  SolicitudPagina,
 } from '../models/factura.dto.js';
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
@@ -27,6 +29,17 @@ export function consultaFiltros(filtros: FacturaFiltrosDTO): URLSearchParams {
   if (filtros.fechaHasta) params.set('fechaHasta', filtros.fechaHasta);
   if (filtros.estado) params.set('estado', filtros.estado);
   if (filtros.montoMinimo !== undefined) params.set('montoMinimo', String(filtros.montoMinimo));
+  if (filtros.numero !== undefined) params.set('numero', String(filtros.numero));
+  if (filtros.clienteId !== undefined) params.set('clienteId', String(filtros.clienteId));
+  if (filtros.informada) params.set('informada', filtros.informada);
+  return params;
+}
+
+/** Parámetro q de la búsqueda de catálogos: se omite si el texto está vacío o en blanco. */
+function consultaTexto(q: string): URLSearchParams {
+  const params = new URLSearchParams();
+  const texto = q.trim();
+  if (texto !== '') params.set('q', texto);
   return params;
 }
 
@@ -79,8 +92,23 @@ export class FacturaService {
     this.base = baseUrl.replace(/\/+$/, '');
   }
 
-  obtenerFacturas(filtros: FacturaFiltrosDTO): Promise<FacturaReporteDTO[]> {
-    return this.enviar<FacturaReporteDTO[]>(conQuery('/facturas', consultaFiltros(filtros)), 'GET');
+  obtenerFacturas(filtros: FacturaFiltrosDTO, pagina: SolicitudPagina): Promise<PaginaDTO<FacturaReporteDTO>> {
+    const params = consultaFiltros(filtros);
+    params.set('pagina', String(pagina.pagina));
+    params.set('tamanio', String(pagina.tamanio));
+    return this.enviar<PaginaDTO<FacturaReporteDTO>>(conQuery('/facturas', params), 'GET');
+  }
+
+  buscarClientes(q: string): Promise<OpcionDTO[]> {
+    return this.enviar<OpcionDTO[]>(conQuery('/catalogos/clientes', consultaTexto(q)), 'GET');
+  }
+
+  buscarListaPrecioArticulos(q: string): Promise<OpcionDTO[]> {
+    return this.enviar<OpcionDTO[]>(conQuery('/catalogos/lista-precio-articulos', consultaTexto(q)), 'GET');
+  }
+
+  urlPdfFactura(id: number): string {
+    return `${this.base}/facturas/${id}/pdf`;
   }
 
   obtenerFactura(id: number): Promise<FacturaDetalladaDTO> {

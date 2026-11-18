@@ -120,6 +120,93 @@ class CatalogoServiceIntegracionTest extends PersistenciaBase {
                 .containsExactly(segundo.getId(), primero.getId());
     }
 
+    // --- Búsqueda (etapa 6) ---
+
+    private void dosClientesYUnoConPorcentaje() {
+        em.persist(cliente("Juan Servicios", "20-12345678-9", contacto("j@ejemplo.com"), domicilio("A", "1")));
+        em.persist(cliente("Ferretería Ñandú", "30-71234567-1", contacto("f@ejemplo.com"), domicilio("B", "2")));
+        em.persist(cliente("Descuento 50% SA", "30-70000000-5", contacto("d@ejemplo.com"), domicilio("C", "3")));
+        sincronizar();
+    }
+
+    @Test
+    void buscarClientesPorParteDeLaDenominacionSinDistinguirMayusculas() {
+        dosClientesYUnoConPorcentaje();
+
+        assertThat(servicio.clientes("JUAN")).extracting(OpcionDTO::etiqueta)
+                .containsExactly("Juan Servicios (20-12345678-9)");
+        assertThat(servicio.clientes(" servicios ")).extracting(OpcionDTO::etiqueta)
+                .containsExactly("Juan Servicios (20-12345678-9)");
+    }
+
+    @Test
+    void buscarClientesPorParteDelCuit() {
+        dosClientesYUnoConPorcentaje();
+
+        assertThat(servicio.clientes("7123")).extracting(OpcionDTO::etiqueta)
+                .containsExactly("Ferretería Ñandú (30-71234567-1)");
+    }
+
+    @Test
+    void buscarClientesTrataElPorcentajeComoTextoLiteralYRespetaElOrdenPorId() {
+        dosClientesYUnoConPorcentaje();
+
+        assertThat(servicio.clientes("%")).extracting(OpcionDTO::etiqueta)
+                .containsExactly("Descuento 50% SA (30-70000000-5)");
+        assertThat(servicio.clientes("_")).isEmpty();
+        assertThat(servicio.clientes("zzz")).isEmpty();
+        assertThat(servicio.clientes("30-7")).extracting(OpcionDTO::etiqueta)
+                .containsExactly("Ferretería Ñandú (30-71234567-1)", "Descuento 50% SA (30-70000000-5)");
+    }
+
+    @Test
+    void buscarClientesSinTextoDevuelveElCatalogoCompleto() {
+        dosClientesYUnoConPorcentaje();
+
+        assertThat(servicio.clientes(null)).hasSize(3);
+        assertThat(servicio.clientes("   ")).hasSize(3);
+    }
+
+    private void martilloEnDosListasYCableEnGeneral() {
+        ListaPrecio general = em.persist(listaPrecio("GENERAL", "Lista general"));
+        ListaPrecio mayorista = em.persist(listaPrecio("MAYORISTA", "Lista mayorista"));
+        Articulo martillo = em.persist(articulo("ART-001", "Martillo", null, null, null));
+        Articulo cable = em.persist(articulo("ART-003", "Cable HDMI", null, null, null));
+        em.persist(precio(general, martillo, 3000.00));
+        em.persist(precio(mayorista, martillo, 2500.00));
+        em.persist(precio(general, cable, 8000.00));
+        sincronizar();
+    }
+
+    @Test
+    void buscarOfertasPorDenominacionDelArticuloDaLasDosOfertasDelMartilloConSuPrecio() {
+        martilloEnDosListasYCableEnGeneral();
+
+        assertThat(servicio.listaPrecioArticulos("martillo")).extracting(OpcionDTO::etiqueta, OpcionDTO::valor)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("ART-001 - Martillo (GENERAL)", 3000.00),
+                        org.assertj.core.groups.Tuple.tuple("ART-001 - Martillo (MAYORISTA)", 2500.00));
+    }
+
+    @Test
+    void buscarOfertasPorCodigoDeListaYPorCodigoDeArticulo() {
+        martilloEnDosListasYCableEnGeneral();
+
+        assertThat(servicio.listaPrecioArticulos("mayor")).extracting(OpcionDTO::etiqueta)
+                .containsExactly("ART-001 - Martillo (MAYORISTA)");
+        assertThat(servicio.listaPrecioArticulos(" art-003 ")).extracting(OpcionDTO::etiqueta)
+                .containsExactly("ART-003 - Cable HDMI (GENERAL)");
+        assertThat(servicio.listaPrecioArticulos("zzz")).isEmpty();
+    }
+
+    @Test
+    void buscarOfertasSinTextoDevuelveTodasPorIdYConArticuloYListaYaCargados() {
+        martilloEnDosListasYCableEnGeneral();
+
+        assertThat(servicio.listaPrecioArticulos("  ")).hasSize(3);
+        assertThat(servicio.listaPrecioArticulos(null)).hasSize(3);
+    }
+
     @Test
     void sinRegistrosCadaCatalogoDevuelveListaVacia() {
         assertThat(servicio.puntosVenta()).isEmpty();

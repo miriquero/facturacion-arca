@@ -24,6 +24,10 @@ export interface FiltrosTexto {
   fechaHasta: string;
   estado: string;
   montoMinimo: string;
+  /** Opcionales: los llena la pantalla; las pruebas anteriores a la etapa 6 no los informan. */
+  numero?: string;
+  informada?: string;
+  clienteId?: string;
 }
 
 const MAX_DESCRIPCION = 255;
@@ -102,6 +106,14 @@ export function validarFiltros(f: FiltrosTexto): Resultado<FacturaFiltrosDTO> {
     if (!Number.isFinite(monto) || monto < 0) errores.montoMinimo = 'El monto mínimo debe ser un número mayor o igual a 0.';
     else datos.montoMinimo = monto;
   }
+  const nro = numero(f.numero ?? '');
+  if (nro !== undefined) {
+    if (!Number.isInteger(nro) || nro < 1) errores.numero = 'El número de factura debe ser un entero mayor o igual a 1.';
+    else datos.numero = nro;
+  }
+  const cliente = numero(f.clienteId ?? '');
+  if (cliente !== undefined && Number.isFinite(cliente)) datos.clienteId = cliente;
+  if (f.informada === 'true' || f.informada === 'false') datos.informada = f.informada;
   return Object.keys(errores).length > 0 ? { errores } : { datos, errores };
 }
 

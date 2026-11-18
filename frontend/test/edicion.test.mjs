@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { iniciarAplicacion } from '../dist/aplicacion.js';
 import { ApiError } from '../dist/services/ApiError.js';
-import { catalogosEjemplo, dialogosFalsos, esperarTareas, fila, montarPagina, servicioFalso, temporizadorManual } from '../soporte-pruebas/soporte.mjs';
+import { catalogosEjemplo, dialogosFalsos, esperarTareas, fila, montarPagina, servicioFalso, temporizadorManual, ventanaModalFalsa } from '../soporte-pruebas/soporte.mjs';
 
 const detalle = (id, extra = {}) => ({
   id, numero: null, fechaEmision: '2026-11-03', estado: 'BORRADOR', clienteId: 2, clienteDenominacion: 'Ana SA',
@@ -23,7 +23,7 @@ async function arrancar(auto = {}) {
     obtenerFacturas: [fila({ id: 5, estado: 'BORRADOR', numeroFactura: null }), fila({ id: 6, estado: 'BORRADOR', numeroFactura: null })],
     ...auto,
   });
-  const app = iniciarAplicacion({ documento: pagina.documento, servicio, dialogos: dialogosFalsos(), temporizador: temporizadorManual() });
+  const app = iniciarAplicacion({ documento: pagina.documento, servicio, dialogos: dialogosFalsos(), temporizador: temporizadorManual(), ventanaModal: ventanaModalFalsa() });
   await app.listo;
   const $ = (id) => pagina.documento.getElementById(id);
   const filas = () => [...$('renglones').querySelectorAll('fieldset.renglon')];
@@ -41,13 +41,14 @@ test('Borrador con dos renglones: cabecera, renglones, titulo y foco en el titul
   t.editar(5);
   await esperarTareas();
   assert.deepEqual(t.servicio.de('obtenerFactura')[0].args, [5]);
-  assert.equal(t.$('cliente').value, '2');
+  assert.equal(t.$('cliente').getAttribute('data-id'), '2');
+  assert.equal(t.$('cliente').textContent, 'Ana SA');
   assert.equal(t.$('tipo-moneda').value, '1');
   assert.equal(t.$('fecha-emision').value, '2026-11-03');
   assert.equal(t.$('observaciones').value, 'Entrega en sucursal');
   assert.equal(t.filas().length, 2);
-  assert.deepEqual([0, 1].map((i) => [t.campo(i, 'listaPrecioArticuloId').value, t.campo(i, 'cantidad').value, t.campo(i, 'porcentajeBonificacion').value, t.campo(i, 'descripcion').value]),
-    [['1', '2', '10', 'Martillo grande'], ['3', '1', '0', '']]);
+  assert.deepEqual([0, 1].map((i) => [t.campo(i, 'listaPrecioArticuloId').getAttribute('data-id'), t.campo(i, 'listaPrecioArticuloId').textContent, t.campo(i, 'cantidad').value, t.campo(i, 'porcentajeBonificacion').value, t.campo(i, 'descripcion').value]),
+    [['1', 'Martillo', '2', '10', 'Martillo grande'], ['3', 'Cable HDMI', '1', '0', '']]);
   assert.equal(t.$('titulo-formulario').textContent, 'Editar borrador 5');
   assert.equal(t.documento.activeElement, t.$('titulo-formulario'));
   assert.equal(t.$('cancelar-edicion').hidden, false);
@@ -96,7 +97,7 @@ test('Conflicto al editar: 409 conserva valores y modo edicion y muestra el deta
   assert.equal(t.$('titulo-formulario').textContent, 'Editar borrador 5');
   assert.equal(t.filas().length, 2);
   assert.equal(t.campo(0, 'cantidad').value, '2');
-  assert.equal(t.$('cliente').value, '2');
+  assert.equal(t.$('cliente').getAttribute('data-id'), '2');
 });
 
 test('Cancelar sin guardar: formulario vacio en modo alta y ningun PUT', async () => {
@@ -108,7 +109,7 @@ test('Cancelar sin guardar: formulario vacio en modo alta y ningun PUT', async (
   assert.equal(t.$('titulo-formulario').textContent, 'Nuevo borrador');
   assert.equal(t.filas().length, 1);
   assert.equal(t.campo(0, 'cantidad').value, '');
-  assert.equal(t.$('cliente').value, '');
+  assert.equal(t.$('cliente').hasAttribute('data-id'), false);
   assert.equal(t.$('cancelar-edicion').hidden, true);
   assert.equal(t.servicio.de('actualizarFactura').length, 0);
 });
@@ -149,4 +150,40 @@ test('Error al cargar el detalle: se muestra y no entra en edicion; uno tardio d
   await esperarTareas();
   assert.match(t.$('estado').textContent, /La factura 6 no existe/);
   assert.equal(t.$('titulo-formulario').textContent, 'Nuevo borrador');
+});
+
+// ---- Etapa 6: etiquetas del cliente y de cada opcion al editar ----
+
+test('Editar con catalogos que no traen al cliente ni al articulo: respaldo con los datos del detalle', async () => {
+  const cat = catalogosEjemplo();
+  cat.clientes = [];
+  cat.listaPrecioArticulos = [];
+  const t = await arrancar({ obtenerCatalogos: cat, obtenerFactura: detalle(5, { clienteCuitCuil: '20-12345678-9' }) });
+  t.editar(5);
+  await esperarTareas();
+  assert.equal(t.$('cliente').textContent, 'Ana SA (20-12345678-9)');
+  assert.equal(t.$('cliente').getAttribute('data-id'), '2');
+  assert.equal(t.campo(0, 'listaPrecioArticuloId').textContent, 'MAR - Martillo grande');
+  assert.equal(t.campo(1, 'listaPrecioArticuloId').textContent, 'HDMI');
+  assert.equal(t.campo(1, 'listaPrecioArticuloId').getAttribute('data-id'), '3');
+  assert.equal(t.filas()[1].querySelector('output[name="precio"]').textContent, '8.000,00');
+});
+
+test('Editar un borrador sin cliente: Consumidor Final y sin id', async () => {
+  const t = await arrancar({ obtenerFactura: detalle(5, { clienteId: null, clienteDenominacion: 'Consumidor Final', clienteCuitCuil: null }) });
+  t.editar(5);
+  await esperarTareas();
+  assert.equal(t.$('cliente').textContent, 'Consumidor Final');
+  assert.equal(t.$('cliente').hasAttribute('data-id'), false);
+});
+
+test('Editar y guardar sin tocar el cliente ni los articulos: el PUT conserva sus ids', async () => {
+  const t = await arrancar({ obtenerFactura: detalle(5), actualizarFactura: fila({ id: 5, estado: 'BORRADOR' }) });
+  t.editar(5);
+  await esperarTareas();
+  t.$('form-factura').requestSubmit();
+  await esperarTareas();
+  const req = t.servicio.de('actualizarFactura')[0].args[1];
+  assert.equal(req.clienteId, 2);
+  assert.deepEqual(req.detalles.map((d) => d.listaPrecioArticuloId), [1, 3]);
 });

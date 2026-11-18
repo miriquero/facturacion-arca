@@ -22,6 +22,18 @@ public class GlifoNoSoportadoException extends RuntimeException {
         this.fila = fila;
     }
 
+    /**
+     * Variante del comprobante de una factura: identifica el dato por su nombre y no sugiere otro formato (un
+     * comprobante no tiene versión en Excel ni TXT).
+     */
+    public GlifoNoSoportadoException(int codePoint, String dato) {
+        super(String.format("El carácter U+%04X del dato «%s» no está disponible en la fuente del PDF.", codePoint,
+                dato));
+        this.codePoint = codePoint;
+        this.campo = dato;
+        this.fila = 0;
+    }
+
     private static String mensaje(int codePoint, String campo, int fila) {
         String ubicacion = fila > 0 ? "campo " + campo + " (fila " + fila + ")" : "texto fijo " + campo;
         return String.format("El carácter U+%04X del %s no está disponible en la fuente del PDF; exportá en Excel o TXT.",

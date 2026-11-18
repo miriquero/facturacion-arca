@@ -31,6 +31,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcTest(FacturaRestController.class)
 class CorsConfigTest {
 
+    private static final ar.edu.utn.frm.facturacion.dto.PaginaDTO<ar.edu.utn.frm.facturacion.dto.FacturaReporteDTO> PAGINA_VACIA =
+            ar.edu.utn.frm.facturacion.dto.PaginaDTO.de(List.of(), ar.edu.utn.frm.facturacion.dto.SolicitudPagina.de(null, null), 0);
+
     @TestConfiguration
     static class RelojFijo {
         @Bean
@@ -53,7 +56,8 @@ class CorsConfigTest {
 
     @Test
     void origenDelFrontendEn5173RecibeSuPropioOrigenComoPermitido() throws Exception {
-        when(facturaService.listar(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(facturaService.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(PAGINA_VACIA);
 
         mvc.perform(get("/api/facturas").header("Origin", "http://localhost:5173"))
                 .andExpect(status().isOk())
@@ -83,11 +87,24 @@ class CorsConfigTest {
                         org.hamcrest.Matchers.containsString("Content-Disposition")));
     }
 
+    @Test
+    void elPdfDeUnaFacturaTambienExponeContentDispositionAlOrigenDelFrontend() throws Exception {
+        when(facturaService.generarComprobante(7L)).thenReturn(new ArchivoReporte("factura-0001-00000004.pdf",
+                MediaType.APPLICATION_PDF, new byte[] {'%', 'P', 'D', 'F'}));
+
+        mvc.perform(get("/api/facturas/7/pdf").header("Origin", "http://localhost:5173"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+                .andExpect(header().string("Access-Control-Expose-Headers",
+                        org.hamcrest.Matchers.containsString("Content-Disposition")));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173",
             "http://127.0.0.1:3000"})
     void losCuatroOrigenesLocalesSonAdmitidos(String origen) throws Exception {
-        when(facturaService.listar(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(facturaService.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(PAGINA_VACIA);
 
         mvc.perform(get("/api/facturas").header("Origin", origen))
                 .andExpect(status().isOk())
@@ -99,7 +116,8 @@ class CorsConfigTest {
             "https://localhost:5173"})
     void otroPuertoOtroHostOEsquemaDistintoSeRechazanConForbiddenYSinEncabezadoPermisivo(String origen)
             throws Exception {
-        when(facturaService.listar(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(facturaService.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(PAGINA_VACIA);
 
         mvc.perform(get("/api/facturas").header("Origin", origen))
                 .andExpect(status().isForbidden())
@@ -108,7 +126,8 @@ class CorsConfigTest {
 
     @Test
     void sinEncabezadoOriginElClienteSinNavegadorRecibeLaRespuestaSinEncabezadosCors() throws Exception {
-        when(facturaService.listar(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(facturaService.listar(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(PAGINA_VACIA);
 
         mvc.perform(get("/api/facturas"))
                 .andExpect(status().isOk())

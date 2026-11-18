@@ -1,5 +1,6 @@
 package ar.edu.utn.frm.facturacion.report;
 
+import ar.edu.utn.frm.facturacion.dto.FacturaDetalladaDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaReporteDTO;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -26,15 +27,23 @@ public class ReporteFacturasService {
     private static final String HOJA_EXCEL = "Facturas";
 
     private final ReportePdf pdf;
+    private final ComprobantePdf comprobante;
 
     @Autowired
     public ReporteFacturasService(Clock reloj) {
-        this(reloj, ReportePdf.RUTA_FUENTE);
+        this(reloj, FuentePdf.RUTA_FUENTE);
     }
 
     /** Solo para pruebas: permite indicar otra ruta de la fuente (p. ej. una inexistente). */
     ReporteFacturasService(Clock reloj, String rutaFuente) {
-        this.pdf = new ReportePdf(reloj, rutaFuente);
+        FuentePdf fuente = new FuentePdf(rutaFuente);
+        this.pdf = new ReportePdf(reloj, fuente);
+        this.comprobante = new ComprobantePdf(reloj, fuente);
+    }
+
+    /** Comprobante PDF de una factura (A4 vertical) a partir de su detalle ya armado. */
+    public byte[] generarComprobante(FacturaDetalladaDTO factura) {
+        return comprobante.generar(factura);
     }
 
     public byte[] generarPdf(List<FacturaReporteDTO> filas) {

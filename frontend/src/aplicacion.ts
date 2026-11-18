@@ -1,22 +1,37 @@
-import type { Catalogos, FacturaDetalladaDTO, FacturaFiltrosDTO, FacturaReporteDTO, FacturaRequestDTO, FormatoReporte } from './models/factura.dto.js';
+import type {
+  Catalogos,
+  FacturaDetalladaDTO,
+  FacturaFiltrosDTO,
+  FacturaReporteDTO,
+  FacturaRequestDTO,
+  FormatoReporte,
+  OpcionDTO,
+  PaginaDTO,
+  SolicitudPagina,
+} from './models/factura.dto.js';
 import { ApiError } from './services/ApiError.js';
 import { limpiarInvalido, marcarInvalido } from './ui/dom.js';
+import { Explorador, type VentanaModal } from './ui/explorador.js';
 import { Formulario } from './ui/formulario.js';
-import { Listado, type Accion } from './ui/listado.js';
+import { Listado, textoCantidad, type Accion } from './ui/listado.js';
+import { Paginacion, textoPagina } from './ui/paginacion.js';
 import { RegionEstado, type Temporizador } from './ui/regionEstado.js';
 import { ControlSolicitudes } from './ui/solicitudes.js';
 import { validarFiltros, validarFormulario, validarMotivo } from './ui/validacion.js';
 
 /** Interfaz pública del servicio HTTP que usa la aplicación (la satisface FacturaService y los dobles de prueba). */
 export interface ApiFacturas {
-  obtenerFacturas(filtros: FacturaFiltrosDTO): Promise<FacturaReporteDTO[]>;
+  obtenerFacturas(filtros: FacturaFiltrosDTO, pagina: SolicitudPagina): Promise<PaginaDTO<FacturaReporteDTO>>;
   cambiarEstado(id: number, estado: 'EMITIDA' | 'ANULADA', observaciones?: string): Promise<FacturaReporteDTO>;
   eliminarFactura(id: number): Promise<void>;
   obtenerFactura(id: number): Promise<FacturaDetalladaDTO>;
   obtenerCatalogos(): Promise<Catalogos>;
   crearFactura(req: FacturaRequestDTO): Promise<FacturaReporteDTO>;
   actualizarFactura(id: number, req: FacturaRequestDTO): Promise<FacturaReporteDTO>;
+  buscarClientes(q: string): Promise<OpcionDTO[]>;
+  buscarListaPrecioArticulos(q: string): Promise<OpcionDTO[]>;
   urlReporte(filtros: FacturaFiltrosDTO, formato: FormatoReporte): string;
+  urlPdfFactura(id: number): string;
 }
 
 export interface Dialogos {
@@ -29,6 +44,8 @@ export interface Entorno {
   servicio: ApiFacturas;
   dialogos: Dialogos;
   temporizador: Temporizador;
+  /** Abre y cierra el diálogo del explorador (showModal en producción, doble en las pruebas). */
+  ventanaModal: VentanaModal;
 }
 
 export interface Aplicacion {
@@ -49,33 +66,76 @@ export function iniciarAplicacion(entorno: Entorno): Aplicacion {
   };
 
   const region = new RegionEstado($('estado'), temporizador);
-  const formulario = new Formulario(doc);
+  const explorador = new Explorador(doc, entorno.ventanaModal);
+  const buscarClientes = (disparador: HTMLElement, titulo: string): Promise<OpcionDTO | null> =>
+    explorador.elegir({ titulo, buscar: (q) => servicio.buscarClientes(q) }, disparador);
+  const formulario = new Formulario(doc, {
+    cliente: (disparador) => buscarClientes(disparador, 'Buscar cliente'),
+    articulo: (disparador, renglon) =>
+      explorador.elegir(
+        { titulo: `Buscar artículo de lista de precios (renglón ${renglon})`, buscar: (q) => servicio.buscarListaPrecioArticulos(q), conPrecio: true },
+        disparador,
+      ),
+  });
   const busquedas = new ControlSolicitudes();
   const cargaEdicion = new ControlSolicitudes();
   let filtrosAplicados: FacturaFiltrosDTO = {};
   let guardando = false;
   let accionEnCurso = false;
 
-  const listado = new Listado(doc, $('filas'), $('contador'), $('sin-resultados'), (accion, id) => void accionFila(accion, id));
+  const listado = new Listado(doc, $('filas'), $('contador'), $('sin-resultados'), (accion, id) => void accionFila(accion, id), (id) => servicio.urlPdfFactura(id));
 
-  /** Tabla, contador y enlaces cambian juntos con una misma respuesta. */
-  function aplicarResultado(filas: FacturaReporteDTO[], filtros: FacturaFiltrosDTO): void {
+  const paginacion = new Paginacion(doc, (cambio) => {
+    region.limpiar();
+    if (cambio.tipo === 'pagina') void ejecutarConsulta(filtrosAplicados, { pagina: cambio.pagina, tamanio: cambio.tamanio }, 'pagina');
+    else void ejecutarConsulta(filtrosAplicados, { pagina: 0, tamanio: cambio.tamanio }, 'pagina');
+  });
+
+  /** Tabla, contador, paginación y enlaces cambian juntos con una misma respuesta. */
+  function aplicarResultado(resultado: PaginaDTO<FacturaReporteDTO>, filtros: FacturaFiltrosDTO): void {
     filtrosAplicados = filtros;
-    listado.mostrar(filas);
+    listado.mostrar(resultado.items, resultado.totalElementos);
+    paginacion.mostrar(resultado);
     $('descarga-pdf').setAttribute('href', servicio.urlReporte(filtros, 'pdf'));
     $('descarga-xlsx').setAttribute('href', servicio.urlReporte(filtros, 'xlsx'));
   }
 
-  async function ejecutarBusqueda(filtros: FacturaFiltrosDTO): Promise<void> {
+  type Origen = 'busqueda' | 'pagina' | 'recarga';
+
+  /**
+   * Única puerta del listado (búsqueda, cambio de página o de tamaño y recarga tras una acción): un solo
+   * ControlSolicitudes descarta la respuesta obsoleta de cualquier origen. Los controles de paginación quedan
+   * bloqueados mientras la solicitud vigente está en curso y se liberan siempre al terminar.
+   */
+  async function ejecutarConsulta(filtros: FacturaFiltrosDTO, solicitud: SolicitudPagina, origen: Origen, reintento = false): Promise<void> {
     const id = busquedas.iniciar();
+    paginacion.ocupar(true);
     try {
-      const filas = await servicio.obtenerFacturas(filtros);
+      const resultado = await servicio.obtenerFacturas(filtros, solicitud);
       if (!busquedas.esVigente(id)) return;
-      aplicarResultado(filas, filtros);
+      // Tras eliminar el único elemento de la última página: se pide la última que existe, una sola vez.
+      if (origen === 'recarga' && !reintento && resultado.items.length === 0 && resultado.totalPaginas > 0 && solicitud.pagina >= resultado.totalPaginas) {
+        await ejecutarConsulta(filtros, { pagina: resultado.totalPaginas - 1, tamanio: solicitud.tamanio }, origen, true);
+        return;
+      }
+      aplicarResultado(resultado, filtros);
+      if (origen === 'pagina') region.exito(`${textoPagina(resultado.pagina, resultado.totalPaginas)} (${textoCantidad(resultado.totalElementos)})`);
     } catch (e) {
       if (!busquedas.esVigente(id)) return;
       region.error(mensajeDe(e));
+    } finally {
+      if (busquedas.esVigente(id)) paginacion.ocupar(false);
     }
+  }
+
+  /** Buscar, limpiar y carga inicial: siempre la página 0 con el tamaño elegido. */
+  function ejecutarBusqueda(filtros: FacturaFiltrosDTO): Promise<void> {
+    return ejecutarConsulta(filtros, { pagina: 0, tamanio: paginacion.tamanio }, 'busqueda');
+  }
+
+  /** Después de guardar o de una acción: los mismos filtros y la misma página del resultado mostrado. */
+  function recargarListado(): Promise<void> {
+    return ejecutarConsulta(filtrosAplicados, { pagina: paginacion.paginaActual, tamanio: paginacion.tamanioMostrado }, 'recarga');
   }
 
   async function editar(id: number): Promise<void> {
@@ -141,7 +201,7 @@ export function iniciarAplicacion(entorno: Entorno): Aplicacion {
       listado.deshabilitarAcciones(false);
       $<HTMLButtonElement>('guardar').disabled = false;
     }
-    if (recargar) void ejecutarBusqueda(filtrosAplicados);
+    if (recargar) void recargarListado();
   }
 
   /** Bloquea el formulario y las acciones de fila mientras se guarda (y los libera en finally). */
@@ -187,11 +247,29 @@ export function iniciarAplicacion(entorno: Entorno): Aplicacion {
     } finally {
       bloquearGuardado(false);
     }
-    if (guardado) void ejecutarBusqueda(filtrosAplicados);
+    if (guardado) void recargarListado();
     else formulario.enfocarPrimerInvalido();
   }
 
   const campoMonto = $<HTMLInputElement>('filtro-monto');
+  const campoNumero = $<HTMLInputElement>('filtro-numero');
+  const salidaCliente = $('filtro-cliente');
+
+  /** Cliente del filtro: el id vive en data-id de la salida (sin input oculto, que no tendría etiqueta). */
+  function ponerClienteFiltro(opcion: { id: number; etiqueta: string } | null): void {
+    salidaCliente.textContent = opcion === null ? 'Todos' : opcion.etiqueta;
+    if (opcion === null) salidaCliente.removeAttribute('data-id');
+    else salidaCliente.setAttribute('data-id', String(opcion.id));
+  }
+
+  // Elegir el cliente del filtro no busca: solo la acción Buscar pide el listado.
+  $('elegir-cliente-filtro').addEventListener('click', (evento) => {
+    void buscarClientes(evento.currentTarget as HTMLElement, 'Buscar cliente').then((opcion) => {
+      if (opcion !== null) ponerClienteFiltro(opcion);
+    });
+  });
+  $('quitar-cliente-filtro').addEventListener('click', () => ponerClienteFiltro(null));
+
   $('form-filtros').addEventListener('submit', (evento) => {
     evento.preventDefault();
     region.limpiar();
@@ -200,11 +278,20 @@ export function iniciarAplicacion(entorno: Entorno): Aplicacion {
       fechaHasta: $<HTMLInputElement>('filtro-hasta').value,
       estado: $<HTMLSelectElement>('filtro-estado').value,
       montoMinimo: campoMonto.value,
+      numero: campoNumero.value,
+      informada: $<HTMLSelectElement>('filtro-informada').value,
+      clienteId: salidaCliente.getAttribute('data-id') ?? '',
     });
     limpiarInvalido(campoMonto);
+    limpiarInvalido(campoNumero);
     if (resultado.datos === undefined) {
-      marcarInvalido(campoMonto, resultado.errores.montoMinimo ?? 'Valor inválido.');
-      campoMonto.focus();
+      // El campo de número está antes que el monto en el DOM: el foco va al primero inválido.
+      const invalidos: [HTMLInputElement, string | undefined][] = [
+        [campoNumero, resultado.errores.numero],
+        [campoMonto, resultado.errores.montoMinimo],
+      ];
+      for (const [campo, mensaje] of invalidos) if (mensaje !== undefined) marcarInvalido(campo, mensaje);
+      invalidos.find(([, mensaje]) => mensaje !== undefined)?.[0].focus();
       return;
     }
     void ejecutarBusqueda(resultado.datos);
@@ -213,7 +300,9 @@ export function iniciarAplicacion(entorno: Entorno): Aplicacion {
   $('limpiar-filtros').addEventListener('click', () => {
     region.limpiar();
     $<HTMLFormElement>('form-filtros').reset();
+    ponerClienteFiltro(null);
     limpiarInvalido(campoMonto);
+    limpiarInvalido(campoNumero);
     void ejecutarBusqueda({});
   });
 
