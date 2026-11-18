@@ -1,13 +1,19 @@
-import type { Catalogos, FacturaDetalladaDTO, OpcionDTO } from '../models/factura.dto.js';
+import type { Catalogos, FacturaDetalladaDTO, FacturaDetalleDTO, OpcionDTO } from '../models/factura.dto.js';
 import { crear, limpiarInvalido, marcarInvalido, opcion, reemplazarHijos } from './dom.js';
 import { netoEstimado, type RenglonEstimable } from './estimacion.js';
 import { formatearDecimal, formatearImporte } from './formato.js';
 import type { FormularioTexto, RenglonTexto } from './validacion.js';
 
+/** Cómo se elige una opción de catálogo: lo resuelve el explorador modal (se inyecta para poder probarlo). */
+export interface Selector {
+  cliente(disparador: HTMLElement): Promise<OpcionDTO | null>;
+  articulo(disparador: HTMLElement, renglon: number): Promise<OpcionDTO | null>;
+}
+
 export type Modo = { tipo: 'alta' } | { tipo: 'edicion'; id: number };
 
 const CAMPOS_CABECERA: Record<string, string> = {
-  clienteId: 'cliente',
+  clienteId: 'elegir-cliente',
   condicionIvaId: 'condicion-iva',
   puntoVentaId: 'punto-venta',
   tipoMonedaId: 'tipo-moneda',
@@ -17,9 +23,11 @@ const CAMPOS_CABECERA: Record<string, string> = {
 
 const CAMPOS_RENGLON = ['listaPrecioArticuloId', 'cantidad', 'porcentajeBonificacion', 'descripcion'] as const;
 
+const SIN_ARTICULO = 'Sin elegir';
+
 /** Formulario de alta y edición de borradores: cabecera, renglones, estimación y errores por campo. */
 export class Formulario {
-  private readonly cliente: HTMLSelectElement;
+  private readonly cliente: HTMLElement;
   private readonly condicionIva: HTMLSelectElement;
   private readonly puntoVenta: HTMLSelectElement;
   private readonly tipoMoneda: HTMLSelectElement;
@@ -33,11 +41,14 @@ export class Formulario {
   private readonly guardar: HTMLElement;
   private readonly cancelar: HTMLElement;
   private articulos: OpcionDTO[] = [];
+  private clientes: OpcionDTO[] = [];
+  /** Opción lista–artículo elegida en cada renglón (el id va además en data-id de su salida). */
+  private readonly elegidas = new WeakMap<HTMLElement, OpcionDTO>();
   private monedas: OpcionDTO[] = [];
   private contador = 0;
   private modoActual: Modo = { tipo: 'alta' };
 
-  constructor(private readonly doc: Document) {
+  constructor(private readonly doc: Document, private readonly selector: Selector) {
     const e = <T extends HTMLElement>(id: string): T => {
       const el = doc.getElementById(id);
       if (!el) throw new Error(`Falta el elemento #${id} en el HTML.`);
@@ -58,9 +69,18 @@ export class Formulario {
     this.cancelar = e('cancelar-edicion');
 
     this.agregar.addEventListener('click', () => this.agregarRenglon());
+    e('elegir-cliente').addEventListener('click', (evento) => {
+      void this.selector.cliente(evento.currentTarget as HTMLElement).then((opcion) => {
+        if (opcion !== null) this.ponerCliente(opcion);
+      });
+    });
+    e('quitar-cliente').addEventListener('click', () => this.ponerCliente(null));
     this.contenedor.addEventListener('click', (evento) => {
-      const boton = (evento.target as Element).closest('button[data-quitar]');
-      if (boton) this.quitarRenglon(boton.closest('fieldset.renglon') as HTMLElement);
+      const objetivo = evento.target as Element;
+      const quitar = objetivo.closest('button[data-quitar]');
+      if (quitar) this.quitarRenglon(quitar.closest('fieldset.renglon') as HTMLElement);
+      const elegir = objetivo.closest('button[data-elegir]');
+      if (elegir) this.elegirArticulo(elegir as HTMLElement);
     });
     const recalcular = (): void => this.actualizarEstimacion();
     this.contenedor.addEventListener('input', recalcular);
@@ -78,19 +98,18 @@ export class Formulario {
       const nodos = opciones.map((o) => opcion(this.doc, String(o.id), o.etiqueta));
       reemplazarHijos(select, [opcion(this.doc, '', vacia), ...nodos]);
     };
-    llenar(this.cliente, c.clientes, 'Consumidor Final');
+    this.clientes = c.clientes;
     llenar(this.condicionIva, c.condicionesIva, 'Elegí una condición');
     llenar(this.puntoVenta, c.puntosVenta, 'Elegí un punto de venta');
     llenar(this.tipoMoneda, c.tiposMoneda, 'Elegí una moneda');
     this.articulos = c.listaPrecioArticulos;
     this.monedas = c.tiposMoneda;
-    for (const r of this.renglones()) this.llenarArticulos(r.querySelector('select') as HTMLSelectElement);
     this.actualizarEstimacion();
   }
 
   /** Vuelve al modo alta con los campos vacíos y un renglón en blanco. */
   vaciar(): void {
-    this.cliente.value = '';
+    this.ponerCliente(null);
     this.condicionIva.value = '';
     this.puntoVenta.value = '';
     this.tipoMoneda.value = '';
@@ -105,7 +124,7 @@ export class Formulario {
   /** Reconstruye cabecera y renglones desde el detalle recibido y entra en modo edición. */
   cargar(d: FacturaDetalladaDTO): void {
     this.limpiarErrores();
-    this.cliente.value = d.clienteId === null ? '' : String(d.clienteId);
+    this.ponerCliente(this.opcionDeCliente(d));
     this.condicionIva.value = String(d.condicionIvaId);
     this.puntoVenta.value = String(d.puntoVentaId);
     this.tipoMoneda.value = String(d.tipoMonedaId);
@@ -114,7 +133,7 @@ export class Formulario {
     reemplazarHijos(this.contenedor, []);
     for (const det of d.detalles) {
       const r = this.agregarRenglon();
-      this.campo(r, 'listaPrecioArticuloId').value = String(det.listaPrecioArticuloId);
+      this.ponerArticulo(r, this.opcionDeArticulo(det));
       this.campo(r, 'cantidad').value = String(det.cantidad);
       this.campo(r, 'porcentajeBonificacion').value = String(det.porcentajeBonificacion);
       this.campo(r, 'descripcion').value = det.descripcion ?? '';
@@ -127,14 +146,14 @@ export class Formulario {
   /** Texto crudo de los campos, tal cual lo ve el usuario (lo valida validacion.ts). */
   leer(): FormularioTexto {
     return {
-      clienteId: this.cliente.value,
+      clienteId: this.cliente.getAttribute('data-id') ?? '',
       condicionIvaId: this.condicionIva.value,
       puntoVentaId: this.puntoVenta.value,
       tipoMonedaId: this.tipoMoneda.value,
       fechaEmision: this.fecha.value,
       observaciones: this.observaciones.value,
       renglones: this.renglones().map((r): RenglonTexto => ({
-        listaPrecioArticuloId: this.campo(r, 'listaPrecioArticuloId').value,
+        listaPrecioArticuloId: this.campo(r, 'listaPrecioArticuloId').getAttribute('data-id') ?? '',
         cantidad: this.campo(r, 'cantidad').value,
         porcentajeBonificacion: this.campo(r, 'porcentajeBonificacion').value,
         descripcion: this.campo(r, 'descripcion').value,
@@ -181,9 +200,8 @@ export class Formulario {
       div.appendChild(control);
       r.appendChild(div);
     };
-    const select = crear(doc, 'select') as HTMLSelectElement;
-    this.llenarArticulos(select);
-    campoDe('listaPrecioArticuloId', 'Artículo', select);
+    campoDe('listaPrecioArticuloId', 'Artículo', crear(doc, 'output', SIN_ARTICULO));
+    r.querySelector('div.campo')?.appendChild(crear(doc, 'button', undefined, { type: 'button', id: `r${k}-elegir`, 'data-elegir': '' }));
     campoDe('cantidad', 'Cantidad', crear(doc, 'input', undefined, { type: 'number', step: 'any', min: '0' }));
     campoDe('porcentajeBonificacion', 'Bonificación %', crear(doc, 'input', undefined, { type: 'number', step: 'any', min: '0', max: '100' }));
     campoDe('descripcion', 'Descripción (opcional, hasta 255 caracteres)', crear(doc, 'input', undefined, { type: 'text', maxlength: '255' }));
@@ -197,6 +215,22 @@ export class Formulario {
     return r;
   }
 
+  /** El id elegido vive en data-id de la salida; sin id es Consumidor Final. */
+  private ponerCliente(opcion: OpcionDTO | null): void {
+    this.cliente.textContent = opcion === null ? 'Consumidor Final' : opcion.etiqueta;
+    if (opcion === null) this.cliente.removeAttribute('data-id');
+    else this.cliente.setAttribute('data-id', String(opcion.id));
+  }
+
+  /** Etiqueta del cliente del detalle: la del catálogo cargado o, si no figura, la denominación y el CUIT del detalle. */
+  private opcionDeCliente(d: FacturaDetalladaDTO): OpcionDTO | null {
+    if (d.clienteId === null) return null;
+    const delCatalogo = this.clientes.find((c) => c.id === d.clienteId);
+    if (delCatalogo) return delCatalogo;
+    const etiqueta = d.clienteCuitCuil ? `${d.clienteDenominacion} (${d.clienteCuitCuil})` : d.clienteDenominacion;
+    return { id: d.clienteId, etiqueta, valor: null, codigoMoneda: null };
+  }
+
   private quitarRenglon(r: HTMLElement): void {
     const lista = this.renglones();
     const posicion = lista.indexOf(r);
@@ -204,7 +238,7 @@ export class Formulario {
     this.renumerar();
     this.actualizarEstimacion();
     const siguiente = this.renglones()[posicion];
-    if (siguiente) (siguiente.querySelector('select') as HTMLElement).focus();
+    if (siguiente) (siguiente.querySelector('button[data-elegir]') as HTMLElement).focus();
     else this.agregar.focus();
   }
 
@@ -225,16 +259,33 @@ export class Formulario {
         l.textContent = `${l.getAttribute('data-etiqueta')} (renglón ${n})`;
       }
       (r.querySelector('button[data-quitar]') as HTMLElement).textContent = `Quitar renglón ${n}`;
+      (r.querySelector('button[data-elegir]') as HTMLElement).textContent = `Elegir artículo (renglón ${n})`;
     });
   }
 
-  private llenarArticulos(select: HTMLSelectElement): void {
-    const actual = select.value;
-    reemplazarHijos(select, [
-      opcion(this.doc, '', 'Elegí un artículo'),
-      ...this.articulos.map((a) => opcion(this.doc, String(a.id), a.etiqueta)),
-    ]);
-    select.value = actual;
+  /** Abre el explorador de artículos del renglón; cancelar no cambia nada. */
+  private elegirArticulo(boton: HTMLElement): void {
+    const r = boton.closest('fieldset.renglon') as HTMLElement;
+    const numero = this.renglones().indexOf(r) + 1;
+    void this.selector.articulo(boton, numero).then((opcion) => {
+      if (opcion !== null) this.ponerArticulo(r, opcion);
+    });
+  }
+
+  private ponerArticulo(r: HTMLElement, opcion: OpcionDTO): void {
+    const salida = this.campo(r, 'listaPrecioArticuloId');
+    salida.textContent = opcion.etiqueta;
+    salida.setAttribute('data-id', String(opcion.id));
+    this.elegidas.set(r, opcion);
+    this.actualizarEstimacion();
+  }
+
+  /** Opción del renglón del detalle: la del catálogo cargado o, si no figura, código, descripción y precio del detalle. */
+  private opcionDeArticulo(det: FacturaDetalleDTO): OpcionDTO {
+    const delCatalogo = this.articulos.find((a) => a.id === det.listaPrecioArticuloId);
+    if (delCatalogo) return delCatalogo;
+    const etiqueta = det.descripcion ? `${det.articuloCodigo} - ${det.descripcion}` : det.articuloCodigo;
+    return { id: det.listaPrecioArticuloId, etiqueta, valor: det.precioUnitario, codigoMoneda: null };
   }
 
   private destino(clave: string): HTMLElement | null {
@@ -243,7 +294,9 @@ export class Formulario {
     const m = /^detalles\[(\d+)\]\.(\w+)$/.exec(clave);
     if (!m || !(CAMPOS_RENGLON as readonly string[]).includes(m[2] as string)) return null;
     const r = this.renglones()[Number(m[1])];
-    return r ? this.campo(r, m[2] as string) : null;
+    if (!r) return null;
+    // El error del artículo se marca en el botón que abre el explorador (la salida no es un control).
+    return m[2] === 'listaPrecioArticuloId' ? (r.querySelector('button[data-elegir]') as HTMLElement) : this.campo(r, m[2] as string);
   }
 
   private ponerModo(modo: Modo): void {
@@ -256,8 +309,8 @@ export class Formulario {
   /** Precio de catálogo por renglón y total neto estimado sin IVA (informativo). */
   private actualizarEstimacion(): void {
     const estimables: RenglonEstimable[] = this.renglones().map((r) => {
-      const salida = r.querySelector('output') as HTMLElement;
-      const opcionElegida = this.articulos.find((a) => String(a.id) === this.campo(r, 'listaPrecioArticuloId').value);
+      const salida = r.querySelector('output[name="precio"]') as HTMLElement;
+      const opcionElegida = this.elegidas.get(r);
       const cantidadTexto = this.campo(r, 'cantidad').value.trim();
       const cantidad = cantidadTexto === '' ? NaN : Number(cantidadTexto);
       const bonifTexto = this.campo(r, 'porcentajeBonificacion').value.trim();

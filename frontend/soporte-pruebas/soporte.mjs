@@ -70,7 +70,7 @@ export function montarPagina() {
   return { dom, documento: dom.window.document, ventana: dom.window };
 }
 
-const METODOS = ['obtenerFacturas', 'obtenerFactura', 'obtenerCatalogos', 'crearFactura', 'actualizarFactura', 'cambiarEstado', 'eliminarFactura'];
+const METODOS = ['obtenerFacturas', 'obtenerFactura', 'obtenerCatalogos', 'buscarClientes', 'buscarListaPrecioArticulos', 'crearFactura', 'actualizarFactura', 'cambiarEstado', 'eliminarFactura'];
 
 /**
  * Doble de ApiFacturas. Cada llamada se registra en `llamadas`; si `auto` trae el metodo, responde al instante
@@ -84,13 +84,16 @@ export function servicioFalso(auto = {}, base = 'http://localhost:8080/api') {
     llamadas,
     de: (metodo) => llamadas.filter((l) => l.metodo === metodo),
     urlReporte: (filtros, formato) => real.urlReporte(filtros, formato),
+    urlPdfFactura: (id) => real.urlPdfFactura(id),
   };
   for (const metodo of METODOS) {
     servicio[metodo] = (...args) => {
       const d = diferido();
       llamadas.push({ metodo, args, resolver: d.resolver, rechazar: d.rechazar });
       if (metodo in auto) {
-        const valor = typeof auto[metodo] === 'function' ? auto[metodo](...args) : auto[metodo];
+        let valor = typeof auto[metodo] === 'function' ? auto[metodo](...args) : auto[metodo];
+        // Compatibilidad: un arreglo para obtenerFacturas se entrega como la unica pagina del resultado.
+        if (metodo === 'obtenerFacturas' && Array.isArray(valor)) valor = pagina(valor, { tamanio: args[1]?.tamanio ?? 10 });
         if (valor instanceof Error) d.rechazar(valor);
         else d.resolver(valor);
       }
@@ -98,6 +101,11 @@ export function servicioFalso(auto = {}, base = 'http://localhost:8080/api') {
     };
   }
   return servicio;
+}
+
+/** Sobre paginado del listado: por defecto una sola pagina con todos los items. */
+export function pagina(items, { pagina: numero = 0, tamanio = 10, totalElementos = items.length, totalPaginas = Math.ceil(totalElementos / tamanio) } = {}) {
+  return { items, pagina: numero, tamanio, totalElementos, totalPaginas };
 }
 
 export const catalogosEjemplo = () => ({
@@ -143,3 +151,20 @@ export const dialogosFalsos = ({ confirmar = true, motivo = '' } = {}) => {
   };
   return d;
 };
+
+/**
+ * Doble de VentanaModal: jsdom no implementa showModal()/close(), asi que solo alterna el atributo `open`
+ * y registra las aperturas y cierres. Las pruebas simulan Escape disparando el evento `cancel` sobre el dialogo.
+ */
+export function ventanaModalFalsa() {
+  const v = { aperturas: [], cierres: [] };
+  v.abrir = (dialogo) => {
+    v.aperturas.push(dialogo.id);
+    dialogo.setAttribute('open', '');
+  };
+  v.cerrar = (dialogo) => {
+    v.cierres.push(dialogo.id);
+    dialogo.removeAttribute('open');
+  };
+  return v;
+}

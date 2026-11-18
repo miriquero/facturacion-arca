@@ -37,6 +37,7 @@ export interface FacturaDetalladaDTO {
   estado: EstadoFactura;
   clienteId: number | null;
   clienteDenominacion: string;
+  clienteCuitCuil: string | null;
   condicionIvaId: number;
   condicionIva: string;
   puntoVentaId: number;
@@ -83,6 +84,25 @@ export interface FacturaFiltrosDTO {
   fechaHasta?: string;
   estado?: EstadoFactura;
   montoMinimo?: number;
+  numero?: number;
+  clienteId?: number;
+  informada?: 'true' | 'false';
+}
+
+/** Sobre paginado del listado (GET /api/facturas). */
+export interface PaginaDTO<T> {
+  items: T[];
+  /** Base 0. */
+  pagina: number;
+  tamanio: number;
+  totalElementos: number;
+  totalPaginas: number;
+}
+
+export interface SolicitudPagina {
+  /** Base 0. */
+  pagina: number;
+  tamanio: number;
 }
 
 export interface OpcionDTO {

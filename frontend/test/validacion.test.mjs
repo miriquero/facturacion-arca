@@ -94,3 +94,26 @@ test('filtros: estado y fechas informados pasan; vacios se omiten', () => {
   const r = validarFiltros({ fechaDesde: '2026-11-01', fechaHasta: '', estado: 'EMITIDA', montoMinimo: '' });
   assert.deepEqual(r.datos, { fechaDesde: '2026-11-01', estado: 'EMITIDA' });
 });
+
+// ---- Etapa 6: filtros de numero, cliente e informada ----
+
+const filtrosTexto = (extra = {}) => ({ fechaDesde: '', fechaHasta: '', estado: '', montoMinimo: '', numero: '', informada: '', clienteId: '', ...extra });
+
+test('numero: 0 y 2.5 invalidos con mensaje; 12 valido; vacio ausente', () => {
+  assert.ok(validarFiltros(filtrosTexto({ numero: '0' })).errores.numero);
+  assert.ok(validarFiltros(filtrosTexto({ numero: '2.5' })).errores.numero);
+  assert.ok(validarFiltros(filtrosTexto({ numero: '-3' })).errores.numero);
+  assert.deepEqual(validarFiltros(filtrosTexto({ numero: '12' })).datos, { numero: 12 });
+  assert.deepEqual(validarFiltros(filtrosTexto({ numero: '  ' })).datos, {});
+});
+
+test('informada: vacio ausente; true y false pasan', () => {
+  assert.deepEqual(validarFiltros(filtrosTexto({ informada: '' })).datos, {});
+  assert.deepEqual(validarFiltros(filtrosTexto({ informada: 'true' })).datos, { informada: 'true' });
+  assert.deepEqual(validarFiltros(filtrosTexto({ informada: 'false' })).datos, { informada: 'false' });
+});
+
+test('clienteId: texto con id pasa como numero; vacio ausente', () => {
+  assert.deepEqual(validarFiltros(filtrosTexto({ clienteId: '2' })).datos, { clienteId: 2 });
+  assert.deepEqual(validarFiltros(filtrosTexto({ clienteId: '' })).datos, {});
+});

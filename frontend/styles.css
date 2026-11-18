@@ -112,3 +112,42 @@ td .botones button { min-height: 2.75rem; }
 
 .renglon { background: #f7f7f7; }
 .total output { font-weight: bold; }
+
+/* Paginación de la grilla */
+#paginacion { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0.75rem 0; }
+#paginacion p { margin: 0; font-weight: 600; }
+.campo-inline { display: flex; align-items: center; gap: 0.5rem; }
+.campo-inline label { font-weight: 600; }
+
+/* Cliente elegido (formulario y filtro) y artículo de cada renglón: salida de texto + botones */
+output { font-weight: 600; overflow-wrap: anywhere; }
+
+/* Explorador modal: showModal() deja inerte el resto de la página y dibuja el ::backdrop */
+dialog#explorador {
+  width: min(40rem, calc(100% - 2rem));
+  max-height: 90vh;
+  overflow: auto;
+  padding: 1rem 1.25rem;
+  border: 2px solid var(--borde);
+  border-radius: 6px;
+  color: var(--texto);
+  background: var(--fondo);
+}
+dialog#explorador::backdrop { background: rgba(0, 0, 0, 0.6); }
+dialog#explorador h2 { margin-top: 0; }
+#explorador-resultados { list-style: none; margin: 0.5rem 0 1rem; padding: 0; }
+#explorador-resultados li { margin-bottom: 0.5rem; }
+#explorador-resultados button { width: 100%; text-align: left; }
+
+/* Imprimir PDF: enlace nativo con la apariencia de los botones secundarios */
+td .botones a.enlace-pdf {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.4rem 0.9rem;
+  border: 2px solid var(--primario);
+  border-radius: 4px;
+  color: var(--primario);
+  background: var(--fondo);
+}

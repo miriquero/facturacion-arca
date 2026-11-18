@@ -18,12 +18,32 @@
         <h2 id="titulo-filtros">Consulta de facturas</h2>
         <form id="form-filtros" novalidate>
           <div class="campo">
+            <label for="filtro-numero">Número de factura</label>
+            <input id="filtro-numero" name="numero" type="number" min="1" step="1">
+          </div>
+          <div class="campo">
             <label for="filtro-desde">Fecha desde</label>
             <input id="filtro-desde" name="fechaDesde" type="date">
           </div>
           <div class="campo">
             <label for="filtro-hasta">Fecha hasta</label>
             <input id="filtro-hasta" name="fechaHasta" type="date">
+          </div>
+          <div class="campo">
+            <label for="filtro-cliente">Cliente</label>
+            <output id="filtro-cliente">Todos</output>
+            <div class="botones">
+              <button type="button" id="elegir-cliente-filtro">Elegir cliente para filtrar</button>
+              <button type="button" id="quitar-cliente-filtro">Quitar cliente del filtro</button>
+            </div>
+          </div>
+          <div class="campo">
+            <label for="filtro-informada">Informada a ARCA</label>
+            <select id="filtro-informada" name="informada">
+              <option value="">Todas</option>
+              <option value="true">Informadas</option>
+              <option value="false">No informadas</option>
+            </select>
           </div>
           <div class="campo">
             <label for="filtro-estado">Estado</label>
@@ -73,6 +93,19 @@
             <tbody id="filas"></tbody>
           </table>
         </div>
+        <nav id="paginacion" aria-label="Paginación de facturas">
+          <button type="button" id="pagina-anterior" disabled>Anterior</button>
+          <p id="pagina-indicador" aria-current="page">Página 1 de 1</p>
+          <button type="button" id="pagina-siguiente" disabled>Siguiente</button>
+          <div class="campo-inline">
+            <label for="tamanio-pagina">Facturas por página</label>
+            <select id="tamanio-pagina" name="tamanio">
+              <option value="10" selected>10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </select>
+          </div>
+        </nav>
       </section>
 
       <section aria-labelledby="titulo-formulario">
@@ -84,7 +117,11 @@
               <legend>Cabecera</legend>
               <div class="campo">
                 <label for="cliente">Cliente</label>
-                <select id="cliente" name="clienteId"></select>
+                <output id="cliente">Consumidor Final</output>
+                <div class="botones">
+                  <button type="button" id="elegir-cliente">Elegir cliente</button>
+                  <button type="button" id="quitar-cliente">Usar Consumidor Final</button>
+                </div>
               </div>
               <div class="campo">
                 <label for="condicion-iva">Condición frente al IVA</label>
@@ -116,7 +153,7 @@
             </fieldset>
 
             <p class="total">
-              Total neto estimado (sin IVA, no vinculante):
+              <label for="total-estimado">Total neto estimado (sin IVA, no vinculante):</label>
               <output id="total-estimado" for="renglones"></output>
             </p>
 
@@ -128,6 +165,23 @@
         </form>
       </section>
     </main>
+
+    <!-- Explorador modal: uno solo para todo (cliente del formulario, cliente del filtro y artículo de cada renglón). -->
+    <dialog id="explorador" aria-labelledby="explorador-titulo">
+      <h2 id="explorador-titulo"></h2>
+      <form id="explorador-form" novalidate>
+        <div class="campo">
+          <label for="explorador-q">Texto a buscar</label>
+          <input id="explorador-q" name="q" type="text" enterkeyhint="search" autocomplete="off">
+        </div>
+        <button type="submit" id="explorador-buscar">Buscar</button>
+      </form>
+      <p id="explorador-cantidad" aria-live="polite"></p>
+      <p id="explorador-error" class="error-campo" role="alert" hidden></p>
+      <p id="explorador-vacio" hidden>No hay resultados para esa búsqueda.</p>
+      <ul id="explorador-resultados"></ul>
+      <button type="button" id="explorador-cancelar">Cancelar</button>
+    </dialog>
     <footer>
       <p>URL base de la API: <code id="estado-api"></code></p>
     </footer>

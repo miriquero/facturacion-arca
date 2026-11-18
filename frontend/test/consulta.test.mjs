@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { iniciarAplicacion } from '../dist/aplicacion.js';
 import { ApiError } from '../dist/services/ApiError.js';
-import { catalogosEjemplo, dialogosFalsos, diferido, esperarTareas, fila, montarPagina, servicioFalso, temporizadorManual } from '../soporte-pruebas/soporte.mjs';
+import { catalogosEjemplo, dialogosFalsos, diferido, esperarTareas, fila, montarPagina, pagina, servicioFalso, temporizadorManual, ventanaModalFalsa } from '../soporte-pruebas/soporte.mjs';
+
+const P0 = { pagina: 0, tamanio: 10 };
 
 function arrancar(auto = {}, dialogos = dialogosFalsos()) {
   const pagina = montarPagina();
-  const servicio = servicioFalso({ obtenerCatalogos: catalogosEjemplo(), obtenerFacturas: [], ...auto });
+  const servicio = servicioFalso({ obtenerCatalogos: catalogosEjemplo(), obtenerFacturas: [], buscarClientes: catalogosEjemplo().clientes, ...auto });
   const temporizador = temporizadorManual();
-  const app = iniciarAplicacion({ documento: pagina.documento, servicio, dialogos, temporizador });
+  const app = iniciarAplicacion({ documento: pagina.documento, servicio, dialogos, temporizador, ventanaModal: ventanaModalFalsa() });
   const $ = (id) => pagina.documento.getElementById(id);
   return { ...pagina, servicio, temporizador, app, $, dialogos };
 }
@@ -32,17 +34,18 @@ test('Selectores completos: etiquetas del servidor con el id del catalogo como v
   assert.ok(opciones(t.$('tipo-moneda')).some((o) => o.texto === 'Pesos' && o.valor === '1'));
 });
 
-test('Cliente opcional: primera opcion Consumidor Final con valor vacio', async () => {
+test('Cliente opcional: el formulario muestra Consumidor Final, el filtro Todos y ninguno tiene id elegido', async () => {
   const t = arrancar();
   await t.app.listo;
-  assert.deepEqual(opciones(t.$('cliente'))[0], { texto: 'Consumidor Final', valor: '' });
-  assert.equal(opciones(t.$('cliente')).length, 3);
+  assert.equal(t.$('cliente').textContent, 'Consumidor Final');
+  assert.equal(t.$('filtro-cliente').textContent, 'Todos');
+  assert.equal(t.$('cliente').hasAttribute('data-id') || t.$('filtro-cliente').hasAttribute('data-id'), false);
 });
 
 test('Carga inicial: catalogos una vez y listado sin filtros', async () => {
   const t = arrancar();
   await t.app.listo;
-  assert.deepEqual(t.servicio.de('obtenerFacturas')[0].args, [{}]);
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[0].args, [{}, P0]);
   assert.equal(t.servicio.de('obtenerCatalogos').length, 1);
 });
 
@@ -111,7 +114,7 @@ test('Busqueda por estado y fecha: el servicio recibe exactamente esos filtros',
   t.$('filtro-desde').value = '2026-11-01';
   buscar(t);
   await esperarTareas();
-  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{ fechaDesde: '2026-11-01', estado: 'EMITIDA' }]);
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{ fechaDesde: '2026-11-01', estado: 'EMITIDA' }, P0]);
 });
 
 test('Limpiar filtros: campos vacios y se pide el listado sin filtros', async () => {
@@ -123,7 +126,7 @@ test('Limpiar filtros: campos vacios y se pide el listado sin filtros', async ()
   await esperarTareas();
   assert.equal(t.$('filtro-estado').value, '');
   assert.equal(t.$('filtro-monto').value, '');
-  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{}]);
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{}, P0]);
 });
 
 test('Monto negativo: campo invalido con mensaje asociado y ninguna llamada', async () => {
@@ -146,7 +149,7 @@ test('Monto cero: se pide con montoMinimo 0 y se quitan las marcas de error', as
   t.$('filtro-monto').value = '0';
   buscar(t);
   await esperarTareas();
-  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{ montoMinimo: 0 }]);
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{ montoMinimo: 0 }, P0]);
   assert.equal(t.$('filtro-monto').hasAttribute('aria-invalid'), false);
   assert.equal(t.$('filtro-monto').hasAttribute('aria-describedby'), false);
 });
@@ -170,9 +173,9 @@ test('Respuestas en orden inverso: quedan tabla, contador y enlaces de EMITIDA',
   t.$('filtro-estado').value = 'EMITIDA';
   buscar(t);
   const [, b1, b2] = t.servicio.de('obtenerFacturas');
-  b2.resolver([fila({ id: 1, estado: 'EMITIDA' })]);
+  b2.resolver(pagina([fila({ id: 1, estado: 'EMITIDA' })]));
   await esperarTareas();
-  b1.resolver([fila({ id: 6, estado: 'BORRADOR' }), fila({ id: 7, estado: 'BORRADOR' })]);
+  b1.resolver(pagina([fila({ id: 6, estado: 'BORRADOR' }), fila({ id: 7, estado: 'BORRADOR' })]));
   await esperarTareas();
   assert.equal(t.$('filas').rows.length, 1);
   assert.equal(t.$('filas').rows[0].cells[7].textContent.includes('EMITIDA'), true);
@@ -188,7 +191,7 @@ test('Error tardio de una busqueda vieja: sin error y tabla de la busqueda 2', a
   buscar(t);
   buscar(t);
   const [, b1, b2] = t.servicio.de('obtenerFacturas');
-  b2.resolver([fila({ id: 9 })]);
+  b2.resolver(pagina([fila({ id: 9 })]));
   await esperarTareas();
   b1.rechazar(new ApiError(500, 'Falló la búsqueda vieja'));
   await esperarTareas();
@@ -216,7 +219,172 @@ test('Un error visible se retira al iniciar una nueva busqueda', async () => {
   const t = arrancar({ obtenerFacturas: new ApiError(500, 'Caído') });
   await t.app.listo;
   assert.match(t.$('estado').textContent, /Caído/);
-  t.servicio.obtenerFacturas = async () => [];
+  t.servicio.obtenerFacturas = async () => pagina([]);
   buscar(t);
   assert.equal(t.$('estado').textContent, '');
+});
+
+// ---- Etapa 6: filtros de numero, informada y cliente; cantidad desde totalElementos ----
+
+test('Filtros nuevos en el HTML: numero, informada y cliente con salida Todos y dos botones', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  const numero = t.$('filtro-numero');
+  assert.equal(numero.getAttribute('type'), 'number');
+  assert.equal(numero.getAttribute('min'), '1');
+  assert.deepEqual(opciones(t.$('filtro-informada')), [
+    { texto: 'Todas', valor: '' },
+    { texto: 'Informadas', valor: 'true' },
+    { texto: 'No informadas', valor: 'false' },
+  ]);
+  assert.equal(t.$('filtro-cliente').tagName, 'OUTPUT');
+  assert.equal(t.$('filtro-cliente').textContent, 'Todos');
+  assert.equal(t.$('filtro-cliente').hasAttribute('data-id'), false);
+  assert.equal(t.$('elegir-cliente-filtro').textContent, 'Elegir cliente para filtrar');
+  assert.equal(t.$('quitar-cliente-filtro').textContent, 'Quitar cliente del filtro');
+  for (const id of ['filtro-numero', 'filtro-informada', 'filtro-cliente']) {
+    assert.ok(t.documento.querySelector(`label[for="${id}"]`), `sin label: ${id}`);
+  }
+});
+
+test('Busqueda por numero e informada: se pide numero 4, informada true y pagina 0', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  t.$('filtro-numero').value = '4';
+  t.$('filtro-informada').value = 'true';
+  buscar(t);
+  await esperarTareas();
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{ numero: 4, informada: 'true' }, P0]);
+});
+
+test('No informadas: se pide informada false', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  t.$('filtro-informada').value = 'false';
+  buscar(t);
+  await esperarTareas();
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{ informada: 'false' }, P0]);
+});
+
+test('Numero 0 o 2.5: campo invalido con mensaje asociado y ninguna peticion; 12 valido limpia la marca', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  for (const invalido of ['0', '2.5']) {
+    t.$('filtro-numero').value = invalido;
+    buscar(t);
+    const campo = t.$('filtro-numero');
+    assert.equal(campo.getAttribute('aria-invalid'), 'true', invalido);
+    assert.match(t.$(campo.getAttribute('aria-describedby')).textContent, /entero mayor o igual a 1/);
+  }
+  await esperarTareas();
+  assert.equal(t.servicio.de('obtenerFacturas').length, 1);
+  t.$('filtro-numero').value = '12';
+  buscar(t);
+  await esperarTareas();
+  assert.equal(t.$('filtro-numero').hasAttribute('aria-invalid'), false);
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{ numero: 12 }, P0]);
+});
+
+test('Cliente del filtro con id elegido: la busqueda lo envia como clienteId', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  t.$('filtro-cliente').textContent = 'Ana SA';
+  t.$('filtro-cliente').setAttribute('data-id', '2');
+  buscar(t);
+  await esperarTareas();
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{ clienteId: 2 }, P0]);
+});
+
+test('Cantidad desde totalElementos: 10 filas y 23 facturas', async () => {
+  const items = Array.from({ length: 10 }, (_, i) => fila({ id: i + 1 }));
+  const t = arrancar({ obtenerFacturas: pagina(items, { totalElementos: 23 }) });
+  await t.app.listo;
+  assert.equal(t.$('filas').rows.length, 10);
+  assert.equal(t.$('contador').textContent, '23 facturas');
+  assert.equal(t.$('sin-resultados').hidden, true);
+});
+
+test('Sin coincidencias con totalElementos 0: 0 facturas y mensaje', async () => {
+  const t = arrancar({ obtenerFacturas: pagina([], { totalElementos: 0, totalPaginas: 0 }) });
+  await t.app.listo;
+  assert.equal(t.$('contador').textContent, '0 facturas');
+  assert.equal(t.$('sin-resultados').hidden, false);
+});
+
+test('Un unico elemento en total: 1 factura en singular', async () => {
+  const t = arrancar({ obtenerFacturas: pagina([fila()], { totalElementos: 1 }) });
+  await t.app.listo;
+  assert.equal(t.$('contador').textContent, '1 factura');
+});
+
+test('Limpiar filtros restablece numero, informada y cliente Todos y pide la pagina 0 sin filtros', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  t.$('filtro-numero').value = '4';
+  t.$('filtro-informada').value = 'true';
+  t.$('filtro-cliente').textContent = 'Ana SA';
+  t.$('filtro-cliente').setAttribute('data-id', '2');
+  t.$('limpiar-filtros').click();
+  await esperarTareas();
+  assert.equal(t.$('filtro-numero').value, '');
+  assert.equal(t.$('filtro-informada').value, '');
+  assert.equal(t.$('filtro-cliente').textContent, 'Todos');
+  assert.equal(t.$('filtro-cliente').hasAttribute('data-id'), false);
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{}, P0]);
+});
+
+test('Enlaces de descarga con informada y sin paginacion', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  t.$('filtro-estado').value = 'ANULADA';
+  t.$('filtro-informada').value = 'true';
+  buscar(t);
+  await esperarTareas();
+  assert.equal(t.$('descarga-pdf').getAttribute('href'), 'http://localhost:8080/api/facturas/reporte?formato=pdf&estado=ANULADA&informada=true');
+  assert.equal(t.$('descarga-xlsx').getAttribute('href'), 'http://localhost:8080/api/facturas/reporte?formato=xlsx&estado=ANULADA&informada=true');
+});
+
+// ---- Etapa 6: cliente del filtro con el explorador ----
+
+async function elegirClienteDelFiltro(t, etiqueta) {
+  t.$('elegir-cliente-filtro').click();
+  await esperarTareas();
+  [...t.documento.querySelectorAll('#explorador-resultados button')].find((b) => b.textContent === etiqueta).click();
+  await esperarTareas();
+}
+
+test('Cliente del filtro: elegir el id 2 con el explorador lo muestra y no busca facturas hasta Buscar', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  await elegirClienteDelFiltro(t, 'Ana SA');
+  assert.equal(t.$('filtro-cliente').textContent, 'Ana SA');
+  assert.equal(t.$('filtro-cliente').getAttribute('data-id'), '2');
+  assert.equal(t.servicio.de('obtenerFacturas').length, 1);
+  assert.equal(t.$('explorador-titulo').textContent, 'Buscar cliente');
+  buscar(t);
+  await esperarTareas();
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{ clienteId: 2 }, P0]);
+});
+
+test('Quitar el cliente del filtro: vuelve a Todos y el listado se pide sin clienteId', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  await elegirClienteDelFiltro(t, 'Ana SA');
+  t.$('quitar-cliente-filtro').click();
+  assert.equal(t.$('filtro-cliente').textContent, 'Todos');
+  assert.equal(t.$('filtro-cliente').hasAttribute('data-id'), false);
+  buscar(t);
+  await esperarTareas();
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{}, P0]);
+});
+
+test('Cancelar el explorador del filtro conserva el cliente elegido', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  await elegirClienteDelFiltro(t, 'Ana SA');
+  t.$('elegir-cliente-filtro').click();
+  await esperarTareas();
+  t.$('explorador-cancelar').click();
+  await esperarTareas();
+  assert.equal(t.$('filtro-cliente').getAttribute('data-id'), '2');
 });

@@ -14,6 +14,7 @@ export class Listado {
     private readonly contador: HTMLElement,
     private readonly sinResultados: HTMLElement,
     onAccion: (accion: Accion, id: number) => void,
+    private readonly urlPdf: (id: number) => string,
   ) {
     tbody.addEventListener('click', (evento) => {
       const boton = (evento.target as Element).closest('button[data-accion]');
@@ -22,10 +23,11 @@ export class Listado {
     });
   }
 
-  mostrar(filas: FacturaReporteDTO[]): void {
+  /** `total` es la cantidad que cumple los filtros (totalElementos), no las filas de esta página. */
+  mostrar(filas: FacturaReporteDTO[], total: number): void {
     reemplazarHijos(this.tbody, filas.map((f) => this.crearFila(f)));
-    this.contador.textContent = `${filas.length} ${filas.length === 1 ? 'factura' : 'facturas'}`;
-    this.sinResultados.hidden = filas.length !== 0;
+    this.contador.textContent = textoCantidad(total);
+    this.sinResultados.hidden = total !== 0;
     this.deshabilitarAcciones(this.deshabilitadas);
   }
 
@@ -64,10 +66,19 @@ export class Listado {
       agregar('editar', 'Editar', 'borrador');
       agregar('emitir', 'Emitir', 'borrador');
       agregar('eliminar', 'Eliminar', 'borrador');
-    } else if (f.estado === 'EMITIDA') {
-      agregar('anular', 'Anular', 'factura');
+    } else {
+      // Informada a ARCA (EMITIDA o ANULADA): solo imprimir; anular únicamente si sigue EMITIDA. Nunca editar ni eliminar.
+      const imprimir = crear(doc, 'a', 'Imprimir PDF', { href: this.urlPdf(f.id), class: 'enlace-pdf' });
+      imprimir.appendChild(crear(doc, 'span', ` factura ${f.id}`, { class: 'visualmente-oculto' }));
+      botones.appendChild(imprimir);
+      if (f.estado === 'EMITIDA') agregar('anular', 'Anular', 'factura');
     }
     td.appendChild(botones);
     return td;
   }
+}
+
+/** `3 facturas`, `1 factura`, `0 facturas`. */
+export function textoCantidad(total: number): string {
+  return `${total} ${total === 1 ? 'factura' : 'facturas'}`;
 }

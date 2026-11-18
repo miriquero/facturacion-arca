@@ -1,6 +1,7 @@
 import { iniciarAplicacion, type Dialogos } from './aplicacion.js';
 import { leerApiBaseUrl } from './config.js';
 import { FacturaService } from './services/FacturaService.js';
+import type { VentanaModal } from './ui/explorador.js';
 import type { Temporizador } from './ui/regionEstado.js';
 
 // Único módulo que usa los globales del navegador: lee el meta, crea las dependencias reales y arranca.
@@ -18,6 +19,12 @@ try {
     pedirMotivo: (mensaje) => Promise.resolve(window.prompt(mensaje, '')),
   };
 
+  // showModal() vuelve inerte el resto de la página, maneja el foco y dispara `cancel` con Escape; close() lo cierra.
+  const ventanaModal: VentanaModal = {
+    abrir: (dialogo) => dialogo.showModal(),
+    cerrar: (dialogo) => dialogo.close(),
+  };
+
   const temporizador: Temporizador = {
     programar(fn, ms) {
       const id = window.setTimeout(fn, ms);
@@ -25,7 +32,7 @@ try {
     },
   };
 
-  iniciarAplicacion({ documento: document, servicio, dialogos, temporizador });
+  iniciarAplicacion({ documento: document, servicio, dialogos, temporizador, ventanaModal });
 } catch (error) {
   const region = document.getElementById('estado');
   if (region) {
