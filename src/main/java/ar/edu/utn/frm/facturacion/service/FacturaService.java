@@ -4,17 +4,39 @@ import ar.edu.utn.frm.facturacion.dto.FacturaDetalladaDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaDetalleDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaFiltrosDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaReporteDTO;
+import ar.edu.utn.frm.facturacion.dto.FacturaRequestDTO;
+import ar.edu.utn.frm.facturacion.config.FacturacionProperties;
+import ar.edu.utn.frm.facturacion.dto.CambioEstadoRequestDTO;
+import ar.edu.utn.frm.facturacion.dto.FacturaDetalleRequestDTO;
+import ar.edu.utn.frm.facturacion.exception.ParametroInvalidoException;
 import ar.edu.utn.frm.facturacion.exception.RecursoNoEncontradoException;
+import ar.edu.utn.frm.facturacion.exception.ReglaNegocioException;
+import ar.edu.utn.frm.facturacion.model.Articulo;
 import ar.edu.utn.frm.facturacion.model.Cliente;
+import ar.edu.utn.frm.facturacion.model.CondicionIva;
+import ar.edu.utn.frm.facturacion.model.EstadoFactura;
 import ar.edu.utn.frm.facturacion.model.FacturaVenta;
 import ar.edu.utn.frm.facturacion.model.FacturaVentaDetalle;
 import ar.edu.utn.frm.facturacion.model.ListaPrecioArticulo;
+import ar.edu.utn.frm.facturacion.model.PuntoVenta;
+import ar.edu.utn.frm.facturacion.model.TipoMoneda;
+import ar.edu.utn.frm.facturacion.repository.ClienteRepository;
+import ar.edu.utn.frm.facturacion.repository.CondicionIvaRepository;
 import ar.edu.utn.frm.facturacion.repository.FacturaVentaRepository;
 import ar.edu.utn.frm.facturacion.repository.FiltroFacturas;
+import ar.edu.utn.frm.facturacion.repository.ListaPrecioArticuloRepository;
+import ar.edu.utn.frm.facturacion.repository.PuntoVentaRepository;
+import ar.edu.utn.frm.facturacion.repository.TipoMonedaRepository;
 import ar.edu.utn.frm.facturacion.report.ArchivoReporte;
 import ar.edu.utn.frm.facturacion.report.FormatoReporte;
 import ar.edu.utn.frm.facturacion.report.ReporteFacturasService;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Locale;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,13 +47,250 @@ import org.springframework.transaction.annotation.Transactional;
 public class FacturaService {
 
     private static final String CONSUMIDOR_FINAL = "Consumidor Final";
+    private static final long VENCIMIENTO_CAE_DIAS = 10;
+    private static final String RESULTADO_APROBADO = "A";
 
     private final FacturaVentaRepository facturaRepository;
     private final ReporteFacturasService reporteService;
+    private final ClienteRepository clienteRepository;
+    private final CondicionIvaRepository condicionIvaRepository;
+    private final PuntoVentaRepository puntoVentaRepository;
+    private final TipoMonedaRepository tipoMonedaRepository;
+    private final ListaPrecioArticuloRepository listaPrecioArticuloRepository;
+    private final CalculadoraImportes calculadora;
+    private final FacturacionProperties propiedades;
+    private final GeneradorCae generadorCae;
+    private final Clock reloj;
 
-    public FacturaService(FacturaVentaRepository facturaRepository, ReporteFacturasService reporteService) {
+    public FacturaService(FacturaVentaRepository facturaRepository, ReporteFacturasService reporteService,
+            ClienteRepository clienteRepository, CondicionIvaRepository condicionIvaRepository,
+            PuntoVentaRepository puntoVentaRepository, TipoMonedaRepository tipoMonedaRepository,
+            ListaPrecioArticuloRepository listaPrecioArticuloRepository, CalculadoraImportes calculadora,
+            FacturacionProperties propiedades, GeneradorCae generadorCae, Clock reloj) {
         this.facturaRepository = facturaRepository;
         this.reporteService = reporteService;
+        this.clienteRepository = clienteRepository;
+        this.condicionIvaRepository = condicionIvaRepository;
+        this.puntoVentaRepository = puntoVentaRepository;
+        this.tipoMonedaRepository = tipoMonedaRepository;
+        this.listaPrecioArticuloRepository = listaPrecioArticuloRepository;
+        this.calculadora = calculadora;
+        this.propiedades = propiedades;
+        this.generadorCae = generadorCae;
+        this.reloj = reloj;
+    }
+
+    /**
+     * Alta de un borrador. Orden: (1) resolver todas las referencias (404) y (2) calcular y convertir todos los
+     * importes (409) antes de (3) construir la entidad y guardarla: un rechazo no deja nada a medias. Número, CAE,
+     * vencimiento y resultado quedan nulos hasta la emisión.
+     */
+    @Transactional
+    public FacturaReporteDTO crear(FacturaRequestDTO solicitud) {
+        Cabecera cabecera = resolverCabecera(solicitud);
+        Renglones renglones = calcularRenglones(solicitud.detalles());
+
+        FacturaVenta factura = new FacturaVenta();
+        factura.setEstado(EstadoFactura.BORRADOR);
+        aplicar(factura, solicitud, cabecera, renglones);
+        return aReporte(facturaRepository.save(factura));
+    }
+
+    /**
+     * Reemplazo completo de un borrador. Orden: (1) bloquear la factura (404 si no existe), (2) verificar que sea
+     * BORRADOR (409), (3) resolver todo y calcular todo, (4) recién entonces modificar la entidad: cabecera,
+     * renglones (misma colección, {@code orphanRemoval}) y {@code registrarModificacion()}, para que la
+     * auditoría de la cabecera se actualice aunque solo cambien los renglones.
+     */
+    @Transactional
+    public FacturaReporteDTO actualizar(Long id, FacturaRequestDTO solicitud) {
+        FacturaVenta factura = bloquear(id);
+        exigirBorrador(factura, "editar");
+        Cabecera cabecera = resolverCabecera(solicitud);
+        Renglones renglones = calcularRenglones(solicitud.detalles());
+
+        aplicar(factura, solicitud, cabecera, renglones);
+        factura.registrarModificacion();
+        return aReporte(factura);
+    }
+
+    /**
+     * Eliminación física de un borrador: bloquea la factura (404 si no existe), verifica que sea BORRADOR (409) y
+     * la borra; la cascada alcanza a los renglones y no a los catálogos. Una factura emitida se anula, no se borra.
+     */
+    @Transactional
+    public void eliminar(Long id) {
+        FacturaVenta factura = bloquear(id);
+        exigirBorrador(factura, "eliminar");
+        facturaRepository.delete(factura);
+    }
+
+    /**
+     * Cambia el estado de una factura. Orden: (1) bloquear la factura (404), (2) normalizar el estado pedido
+     * (400 si el nombre no existe), (3) verificar la transición con {@link EstadoFactura#puedePasarA} (409),
+     * (4) emitir (número y CAE) o anular (fecha de anulación y baja lógica). Una observación no en blanco
+     * reemplaza la de la factura.
+     */
+    @Transactional
+    public FacturaReporteDTO cambiarEstado(Long id, CambioEstadoRequestDTO solicitud) {
+        FacturaVenta factura = bloquear(id);
+        EstadoFactura destino = estadoPedido(solicitud.estado());
+        if (!factura.getEstado().puedePasarA(destino)) {
+            throw new ReglaNegocioException("No se puede pasar la factura " + id + " de " + factura.getEstado()
+                    + " a " + destino + ": solo se admite BORRADOR a EMITIDA y EMITIDA a ANULADA");
+        }
+        if (destino == EstadoFactura.EMITIDA) {
+            emitir(factura);
+        } else {
+            anular(factura);
+        }
+        factura.setEstado(destino);
+        if (solicitud.observaciones() != null && !solicitud.observaciones().isBlank()) {
+            factura.setObservaciones(solicitud.observaciones());
+        }
+        return aReporte(factura);
+    }
+
+    /** Normaliza el texto (sin espacios exteriores, sin distinguir mayúsculas) y lo convierte; 400 si no existe. */
+    private static EstadoFactura estadoPedido(String texto) {
+        String normalizado = texto.strip().toUpperCase(Locale.ROOT);
+        return Arrays.stream(EstadoFactura.values()).filter(e -> e.name().equals(normalizado)).findFirst()
+                .orElseThrow(() -> new ParametroInvalidoException("El estado '" + texto.strip()
+                        + "' no es válido. Valores admitidos: " + Arrays.toString(EstadoFactura.values()) + "."));
+    }
+
+    /**
+     * Emisión simulada, con la factura ya bloqueada y en BORRADOR: sin renglones no se emite (409); se bloquea la
+     * fila del punto de venta y recién entonces se consulta el máximo número, así dos emisiones del mismo punto se
+     * serializan; el CAE se genera después de numerar, de modo que una falla del generador revierte el número.
+     */
+    private void emitir(FacturaVenta factura) {
+        if (factura.getDetalles().isEmpty()) {
+            throw new ReglaNegocioException("No se puede emitir la factura " + factura.getId()
+                    + " porque no tiene renglones");
+        }
+        PuntoVenta puntoVenta = puntoVentaRepository.bloquearPorId(factura.getPuntoVenta().getId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("Punto de venta",
+                        factura.getPuntoVenta().getId()));
+        factura.setNumero(facturaRepository.maximoNumero(puntoVenta) + 1);
+        factura.setCae(generadorCae.generar());
+        factura.setCaeFechaVencimiento(LocalDate.now(reloj).plusDays(VENCIMIENTO_CAE_DIAS));
+        factura.setResultadoAfip(RESULTADO_APROBADO);
+    }
+
+    /** Anulación: se conserva todo el comprobante; se agrega la fecha de anulación y la baja lógica. */
+    private void anular(FacturaVenta factura) {
+        factura.setFechaAnulacion(LocalDate.now(reloj));
+        factura.darDeBaja();
+    }
+
+    /** Carga la factura con bloqueo pesimista de escritura; 404 si no existe. */
+    private FacturaVenta bloquear(Long id) {
+        return facturaRepository.buscarParaActualizar(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Factura", id));
+    }
+
+    private static void exigirBorrador(FacturaVenta factura, String operacion) {
+        if (factura.getEstado() != EstadoFactura.BORRADOR) {
+            throw new ReglaNegocioException("No se puede " + operacion + " la factura " + factura.getId()
+                    + ": está en estado " + factura.getEstado() + " y solo se admite en estado BORRADOR");
+        }
+    }
+
+    /** Referencias de la cabecera ya resueltas (el cliente puede faltar: «Consumidor Final»). */
+    private record Cabecera(Cliente cliente, CondicionIva condicionIva, PuntoVenta puntoVenta, TipoMoneda tipoMoneda) {
+    }
+
+    /** Renglones ya calculados y convertidos, con los importes de cabecera. */
+    private record Renglones(List<FacturaVentaDetalle> lista, double total, double saldo) {
+    }
+
+    private Cabecera resolverCabecera(FacturaRequestDTO solicitud) {
+        CondicionIva condicion = condicionIvaRepository.findById(solicitud.condicionIvaId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("Condición de IVA", solicitud.condicionIvaId()));
+        Cliente cliente = solicitud.clienteId() == null ? null : clienteRepository.findById(solicitud.clienteId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("Cliente", solicitud.clienteId()));
+        PuntoVenta puntoVenta = puntoVentaRepository.findById(solicitud.puntoVentaId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("Punto de venta", solicitud.puntoVentaId()));
+        TipoMoneda moneda = tipoMonedaRepository.findById(solicitud.tipoMonedaId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("Tipo de moneda", solicitud.tipoMonedaId()));
+        return new Cabecera(cliente, condicion, puntoVenta, moneda);
+    }
+
+    /**
+     * Resuelve cada lista-artículo (404), calcula con {@link CalculadoraImportes} y convierte cada importe con
+     * {@link ImporteDouble} (409). No toca ninguna entidad administrada.
+     */
+    private Renglones calcularRenglones(List<FacturaDetalleRequestDTO> solicitados) {
+        List<FacturaVentaDetalle> lista = new ArrayList<>();
+        List<BigDecimal> subtotales = new ArrayList<>();
+        for (FacturaDetalleRequestDTO pedido : solicitados) {
+            ListaPrecioArticulo oferta = listaPrecioArticuloRepository.findById(pedido.listaPrecioArticuloId())
+                    .orElseThrow(() -> new RecursoNoEncontradoException("Lista de precios del artículo",
+                            pedido.listaPrecioArticuloId()));
+            Articulo articulo = oferta.getArticulo();
+            BigDecimal precio = decimalDe(oferta.getPrecioVenta(), "precioUnitario");
+            BigDecimal alicuota = articulo.getAlicuotaIva() == null ? propiedades.ivaPorDefecto()
+                    : decimalDe(articulo.getAlicuotaIva(), "alicuotaIva");
+            BigDecimal bonificacion = pedido.porcentajeBonificacion() == null ? BigDecimal.ZERO
+                    : pedido.porcentajeBonificacion();
+            ImportesRenglon importes = calculadora.calcularRenglon(pedido.cantidad(), precio, bonificacion, alicuota);
+
+            FacturaVentaDetalle renglon = new FacturaVentaDetalle();
+            renglon.setListaPrecioArticulo(oferta);
+            renglon.setDescripcion(pedido.descripcion() == null || pedido.descripcion().isBlank()
+                    ? articulo.getDenominacion() : pedido.descripcion());
+            renglon.setCantidad(ImporteDouble.aDouble(pedido.cantidad(), "cantidad"));
+            renglon.setPrecioUnitario(ImporteDouble.aDouble(precio, "precioUnitario"));
+            renglon.setPorcentajeBonificacion(ImporteDouble.aDouble(bonificacion, "porcentajeBonificacion"));
+            renglon.setImporteNeto(ImporteDouble.aDouble(importes.neto(), "importeNeto"));
+            renglon.setImporteIva(ImporteDouble.aDouble(importes.iva(), "importeIva"));
+            renglon.setImporteSubtotal(ImporteDouble.aDouble(importes.subtotal(), "importeSubtotal"));
+            lista.add(renglon);
+            subtotales.add(importes.subtotal());
+        }
+        BigDecimal total = calculadora.sumar(subtotales);
+        BigDecimal saldo = calculadora.saldo(total, BigDecimal.ZERO);
+        return new Renglones(lista, ImporteDouble.aDouble(total, "importeTotal"),
+                ImporteDouble.aDouble(saldo, "importeSaldo"));
+    }
+
+    /** Lee un {@code double} guardado como decimal exacto; un valor no finito no se puede usar para calcular. */
+    private static BigDecimal decimalDe(double valor, String campo) {
+        if (!Double.isFinite(valor)) {
+            throw new ReglaNegocioException("El valor de '" + campo + "' guardado no es un número finito");
+        }
+        return BigDecimal.valueOf(valor);
+    }
+
+    /** Copia cabecera, fecha, observaciones y renglones a la entidad (única parte que modifica el estado). */
+    private void aplicar(FacturaVenta factura, FacturaRequestDTO solicitud, Cabecera cabecera, Renglones renglones) {
+        factura.setCliente(cabecera.cliente());
+        factura.setCondicionIva(cabecera.condicionIva());
+        factura.setPuntoVenta(cabecera.puntoVenta());
+        factura.setTipoMoneda(cabecera.tipoMoneda());
+        factura.setFechaEmision(solicitud.fechaEmision() == null ? LocalDate.now(reloj) : solicitud.fechaEmision());
+        factura.setObservaciones(solicitud.observaciones());
+        factura.reemplazarDetalles(renglones.lista());
+        factura.setImporteTotal(renglones.total());
+        factura.setImporteCobrado(0.0);
+        factura.setImporteSaldo(renglones.saldo());
+    }
+
+    /** Misma proyección que la consulta JPQL del listado, armada con la factura ya cargada. */
+    private static FacturaReporteDTO aReporte(FacturaVenta factura) {
+        Cliente cliente = factura.getCliente();
+        return new FacturaReporteDTO(
+                factura.getId(),
+                factura.getNumero(),
+                factura.getFechaEmision(),
+                cliente == null ? CONSUMIDOR_FINAL : cliente.getDenominacion(),
+                factura.getCondicionIva().getDenominacion(),
+                factura.getPuntoVenta().getDescripcion(),
+                factura.getImporteTotal(),
+                (long) factura.getDetalles().size(),
+                factura.getEstado(),
+                factura.getTipoMoneda().getCodigoAfip());
     }
 
     public List<FacturaReporteDTO> listar(FacturaFiltrosDTO filtros) {

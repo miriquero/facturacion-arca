@@ -477,7 +477,7 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
             "GET, /api/facturas/abc, 400",
             "GET, /api/facturas/reporte?formato=doc, 400",
             "GET, /api/facturas/reporte?estado=PAGADA, 400",
-            "DELETE, /api/facturas/1, 405",
+            "PUT, /api/facturas, 405",
             "POST, /api/catalogos/clientes, 405"})
     void todoErrorTieneProblemJsonConLosCuatroCampos(String metodo, String ruta, int estado) throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
