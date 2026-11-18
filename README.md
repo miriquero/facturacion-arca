@@ -170,6 +170,37 @@ npm test          # compila y corre las pruebas con node:test + jsdom
 
 Los comandos son los mismos en PowerShell y Bash. La URL base de la API se lee del `<meta name="api-base-url">` de `frontend/index.html` (por defecto `http://localhost:8080/api`); si cambia el puerto del backend (`server.port`), cambiar tambien ese meta (RN-CF-04).
 
+## Etapa 5: frontend en TypeScript
+
+Cliente web sin framework ni bundler (HTML, CSS y TypeScript estricto con modulos ES2020): consulta con filtros, alta y edicion de borradores, emision, anulacion, eliminacion y descargas PDF/Excel. El informe esta en [docs/etapa-5.md](docs/etapa-5.md) (decisiones, control asincrono, accesibilidad, recorrido con el backend real, limites de la simulacion y checklist de teclado y lector de pantalla para revisar a mano). Las muestras de descarga y las capturas estan en `docs/evidencia/etapa-5/`.
+
+**Requisitos**: Node 18.13 o superior (verificado con v24.22.1) y, para el backend, el JDK 17 (ver «Fijar JAVA_HOME»). No hay dependencias nuevas: `npm ci` instala las del `package-lock.json`.
+
+**Compilar y probar** (desde `frontend/`):
+
+```bash
+cd frontend
+npm ci            # una sola vez
+npm run build     # tsc estricto -> frontend/dist
+npm test          # compila y corre node --test (sin argumentos: en Node 24 no usar `node --test test/`) con jsdom
+```
+
+**Correr backend y frontend juntos** (dos terminales; el frontend lee la URL de la API del meta `api-base-url`):
+
+```bash
+# Terminal 1 (raiz del repo, con JDK 17): backend en http://localhost:8080 con H2 y 6 facturas de ejemplo
+export JAVA_HOME=/c/Users/zbook/.jdks/ms-17.0.20.1     # PowerShell: $env:JAVA_HOME = 'C:\Users\zbook\.jdks\ms-17.0.20.1'
+./gradlew bootRun
+
+# Terminal 2: frontend en http://localhost:5173
+cd frontend
+npm run dev
+```
+
+Abrir `http://localhost:5173/`. Si cambia el puerto del backend, cambiar tambien el `<meta name="api-base-url">` de `frontend/index.html`. Los origenes admitidos por CORS son `http://localhost:5173` y `http://127.0.0.1:5173`; el frontend envia `X-Usuario: sistema` (declara quien opera, no autentica).
+
+**Detener y liberar puertos**: `Ctrl+C` en cada terminal. Para comprobar que quedaron libres: `netstat -ano | grep -E ":(8080|5173) .*LISTEN"` (Bash) o `netstat -ano | findstr "8080 5173"` (PowerShell) no debe mostrar nada en estado `LISTENING`. H2 en memoria se borra al reiniciar el backend.
+
 ## Verificaciones y motor
 
 Fecha: 2026-11-11. JDK 17.0.20.1 (Microsoft), Gradle 8.10.2, Node v24.22.1, npm 11.19.1, Docker 29.2.1 / Compose v5.1.0.
@@ -186,6 +217,9 @@ Fecha: 2026-11-11. JDK 17.0.20.1 (Microsoft), Gradle 8.10.2, Node v24.22.1, npm 
 | Etapa 4 (2026-11-18): `gradlew clean test bootJar` con PostgreSQL apagado (503 pruebas de backend: 320 previas + 183 de la etapa 4) | H2 en memoria | OK (0 fallas); `build/libs/` solo tiene `facturacion-arca-1.0.0.jar`
 | Etapa 4: `gradlew testPostgres` (suite de concurrencia: emisiones simultaneas, edicion y baja contra emision, unicidad) | PostgreSQL 16.9 portatil, puerto 5433 | **Verificado el 2026-11-18**: 9 pruebas en verde, motor informado `PostgreSQL 16.9`; el bloqueo se genera como `for no key update` (en H2 es `for update`). El servidor se detuvo al terminar (5433 libre). Un resultado en H2 no prueba PostgreSQL: ver [docs/etapa-4.md](docs/etapa-4.md)
 | Etapa 4: prueba manual del circuito (alta, edicion, emision, anulacion, baja, errores 400/404/409, CORS) con `java -jar` | H2 en memoria | OK; app detenida y 8080 libre |
+| Etapa 5 (2026-11-18, Node v24.22.1, TypeScript 5.6.3): `cd frontend && npm test && npm run build` | n/a (jsdom, sin red) | OK: 151 pruebas, 0 fallas (baseline previo: 7); `tsc` estricto sin errores; sin `innerHTML` ni `new Date` en `frontend/src` |
+| Etapa 5: recorrido manual en el navegador integrado de la herramienta (Chromium) contra `java -jar` (codigo de la etapa 4) y `npm run dev` | H2 en memoria | OK: alta, edicion, emision (numero 4, CAE ficticio), anulacion con motivo, baja de un borrador, cancelaciones sin peticion, 400 y 409 visibles, descargas PDF/Excel/TXT con el filtro EMITIDA. `confirm`/`prompt` se simularon con funciones que devuelven la respuesta (los dialogos nativos bloquean la automatizacion); **sin lector de pantalla, sin zoom real y sin recorrido completo solo con teclado** (a cargo del estudiante, ver checklist en docs/etapa-5.md) |
+| Etapa 5: `gradlew clean test bootJar` con JDK 17 al cerrar | H2 en memoria | OK: 503 pruebas de backend, 0 fallas; el backend no se modifico en esta etapa. Ambos servidores detenidos y 8080 y 5173 libres |
 
 Versiones de herramientas no fijadas por la consigna: `io.spring.dependency-management` 1.1.6, `http-server` ^14.1.1, `jsdom` ^25.0.0; `package-lock.json` congela las exactas.
 
