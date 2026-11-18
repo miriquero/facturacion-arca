@@ -39,11 +39,15 @@ Una factura pedida, editada, cambiada de estado o eliminada por un id inexistent
 - **THEN** la respuesta es `404` con el formato de error uniforme y el detalle menciona `999999`
 
 ### Requirement: Consulta vacía distinta de recurso inexistente
-Una consulta de colección sin elementos MUST responder `200 OK` con un arreglo vacío, y solo la búsqueda de un recurso puntual inexistente MUST responder `404`.
+Una consulta de colección sin elementos MUST responder `200 OK` (los catálogos con un arreglo vacío y el listado paginado de facturas con `items` vacío), y solo la búsqueda de un recurso puntual inexistente MUST responder `404`.
 
 #### Scenario: Listado vacío frente a detalle inexistente
 - **WHEN** sin facturas guardadas se pide `GET /api/facturas` y luego `GET /api/facturas/1`
-- **THEN** la primera respuesta es `200 []` y la segunda `404`
+- **THEN** la primera respuesta es `200` con `items` igual a `[]` y `totalElementos` 0, y la segunda `404`
+
+#### Scenario: PDF de una factura inexistente
+- **WHEN** se pide `GET /api/facturas/999999/pdf`
+- **THEN** la respuesta es `404` con el formato de error uniforme
 
 ### Requirement: Métodos no admitidos como 405
 Un método HTTP que la API no ofrece en una ruta existente MUST responder `405 Method Not Allowed` con el formato de error uniforme.

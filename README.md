@@ -79,11 +79,11 @@ Informe de la etapa: [docs/etapa-2.md](docs/etapa-2.md).
 
 ## Etapa 3: API REST de lectura
 
-Solo `GET` en esta etapa (la escritura llegó en la etapa 4, ver más abajo); no hay login ni paginación. Los errores salen como `application/problem+json` (`status`, `title`, `detail`, `timestamp`). Detalle de decisiones y verificaciones: [docs/etapa-3.md](docs/etapa-3.md).
+Solo `GET` en esta etapa (la escritura llegó en la etapa 4, ver más abajo); no hay login (y en esta etapa tampoco paginación: el listado se pagina desde la etapa 6, ver «Etapa 6»). Los errores salen como `application/problem+json` (`status`, `title`, `detail`, `timestamp`). Detalle de decisiones y verificaciones: [docs/etapa-3.md](docs/etapa-3.md).
 
 | Endpoint | Qué hace |
 |----------|----------|
-| `GET /api/facturas` | Listado (10 campos del reporte, de la más nueva a la más vieja). Filtros opcionales: `fechaDesde`, `fechaHasta` (`yyyy-MM-dd`, inclusivas), `estado` (`BORRADOR`, `EMITIDA`, `ANULADA`; sin distinguir mayúsculas ni espacios; vacío = sin filtro), `montoMinimo` (inclusivo, puede ser negativo; `NaN` e infinitos dan 400). Sin resultados: `200 []`. |
+| `GET /api/facturas` | Listado (10 campos del reporte, de la más nueva a la más vieja). Filtros opcionales: `fechaDesde`, `fechaHasta` (`yyyy-MM-dd`, inclusivas), `estado` (`BORRADOR`, `EMITIDA`, `ANULADA`; sin distinguir mayúsculas ni espacios; vacío = sin filtro), `montoMinimo` (inclusivo, puede ser negativo; `NaN` e infinitos dan 400). Sin resultados: `200` con arreglo vacío en la etapa 3; **desde la etapa 6 devuelve un sobre paginado** `{items, pagina, tamanio, totalElementos, totalPaginas}` (con `items: []` si no hay resultados) y admite más filtros: ver «Etapa 6». |
 | `GET /api/facturas/{id}` | Cabecera y renglones de una factura. Id inexistente: 404. |
 | `GET /api/facturas/reporte?formato=` | Descarga con los mismos filtros que el listado. `pdf` (por defecto), `xlsx` (alias `excel`), `txt` (alias `tsv`) → `facturas.pdf`, `facturas.xlsx`, `facturas.txt`. Otro formato: 400. PDF imposible por un carácter sin glifo: 400. |
 | `GET /api/catalogos/{puntos-venta, clientes, condiciones-iva, tipos-moneda, lista-precio-articulos}` | Opciones `{id, etiqueta, valor, codigoMoneda}` ordenadas por id. |
@@ -201,6 +201,31 @@ Abrir `http://localhost:5173/`. Si cambia el puerto del backend, cambiar tambien
 
 **Detener y liberar puertos**: `Ctrl+C` en cada terminal. Para comprobar que quedaron libres: `netstat -ano | grep -E ":(8080|5173) .*LISTEN"` (Bash) o `netstat -ano | findstr "8080 5173"` (PowerShell) no debe mostrar nada en estado `LISTENING`. H2 en memoria se borra al reiniciar el backend.
 
+## Etapa 6: requisitos verbales del docente
+
+Cambios pedidos en clase el 2026-11-18 (ARCA sigue **simulada**: ni login, ni cobros, ni integración fiscal real). Informe: [docs/etapa-6.md](docs/etapa-6.md); evidencia (capturas y descargas de muestra) en `docs/evidencia/etapa-6/`; ejemplos ejecutables en [requests.http](requests.http).
+
+**Listado paginado (CAMBIO de contrato)**: `GET /api/facturas` ya no devuelve un arreglo sino `{items, pagina, tamanio, totalElementos, totalPaginas}`; las filas de `items` conservan los diez campos. El tag `etapa-3` conserva el contrato anterior.
+
+| Parámetro (`GET /api/facturas`) | Regla |
+|---------------------------------|-------|
+| `pagina` | base 0, por defecto 0; negativa: 400. Una página posterior a la última devuelve `items: []` con el total real. |
+| `tamanio` | por defecto 10, entre 1 y 100; fuera de rango o no numérico: 400. |
+| `numero` | número de comprobante exacto (≥ 1), de cualquier punto de venta; `0` o negativo: 400. |
+| `clienteId` | id de cliente; uno inexistente da resultado vacío, no error. |
+| `informada` | `true` = tiene CAE (EMITIDA y ANULADA), `false` = sin CAE; se normaliza (` FALSE ` vale); otro valor: 400. |
+| `fechaDesde`, `fechaHasta`, `estado`, `montoMinimo` | como en la etapa 3. |
+
+- `GET /api/facturas/reporte` acepta los mismos filtros nuevos e **ignora** `pagina` y `tamanio` (descarga todo el resultado filtrado).
+- **Búsqueda en catálogos**: `GET /api/catalogos/clientes?q=` (denominación o CUIT/CUIL) y `GET /api/catalogos/lista-precio-articulos?q=` (código o denominación del artículo, o código de lista); sin distinguir mayúsculas, `%` y `_` como texto literal, máximo 100 caracteres (si no, 400). Sin `q` devuelven el catálogo completo.
+- **PDF por factura**: `GET /api/facturas/{id}/pdf` devuelve el comprobante (A4 vertical, `factura-PPPP-NNNNNNNN.pdf`) de una factura EMITIDA o ANULADA; un BORRADOR da 409 («no fue informada a ARCA»), un id inexistente 404 y un carácter sin glifo 400. Es un comprobante simulado, sin validez fiscal.
+- `GET /api/facturas/{id}` agrega `clienteCuitCuil`. Las facturas informadas siguen sin poder editarse ni eliminarse (409).
+- **Frontend**: filtros nuevos (número, «Informada a ARCA», cliente), paginación («Anterior»/«Siguiente», «Página X de Y», tamaño 10/20/50), **explorador modal** (`<dialog>` con `showModal()`) para elegir cliente y artículo en el formulario y el cliente del filtro, y el enlace «Imprimir PDF» en las filas EMITIDA y ANULADA.
+
+**Correr todo** (JDK 17): `./gradlew clean test bootJar` en la raíz y `java -Duser.timezone=America/Argentina/Buenos_Aires -jar build/libs/facturacion-arca-1.0.0.jar` (o `./gradlew bootRun`) en una terminal; `cd frontend && npm ci && npm test && npm run build && npm run dev` en otra, y abrir `http://localhost:5173/`. Como en la etapa 5, al terminar detener ambos y comprobar que 8080 y 5173 quedaron libres.
+
+**Límites conocidos**: catálogos sin tope de resultados; el catálogo de artículos trae `codigoMoneda` nulo (el explorador muestra el precio sin moneda); «informada» incluye ANULADA (supuesto a confirmar con el docente); el checklist de teclado, lector de pantalla, zoom y descarga real lo completa el estudiante en `docs/etapa-6.md`.
+
 ## Verificaciones y motor
 
 Fecha: 2026-11-11. JDK 17.0.20.1 (Microsoft), Gradle 8.10.2, Node v24.22.1, npm 11.19.1, Docker 29.2.1 / Compose v5.1.0.
@@ -220,6 +245,11 @@ Fecha: 2026-11-11. JDK 17.0.20.1 (Microsoft), Gradle 8.10.2, Node v24.22.1, npm 
 | Etapa 5 (2026-11-18, Node v24.22.1, TypeScript 5.6.3): `cd frontend && npm test && npm run build` | n/a (jsdom, sin red) | OK: 151 pruebas, 0 fallas (baseline previo: 7); `tsc` estricto sin errores; sin `innerHTML` ni `new Date` en `frontend/src` |
 | Etapa 5: recorrido manual en el navegador integrado de la herramienta (Chromium) contra `java -jar` (codigo de la etapa 4) y `npm run dev` | H2 en memoria | OK: alta, edicion, emision (numero 4, CAE ficticio), anulacion con motivo, baja de un borrador, cancelaciones sin peticion, 400 y 409 visibles, descargas PDF/Excel/TXT con el filtro EMITIDA. `confirm`/`prompt` se simularon con funciones que devuelven la respuesta (los dialogos nativos bloquean la automatizacion); **sin lector de pantalla, sin zoom real y sin recorrido completo solo con teclado** (a cargo del estudiante, ver checklist en docs/etapa-5.md) |
 | Etapa 5: `gradlew clean test bootJar` con JDK 17 al cerrar | H2 en memoria | OK: 503 pruebas de backend, 0 fallas; el backend no se modifico en esta etapa. Ambos servidores detenidos y 8080 y 5173 libres |
+| Etapa 6 (2026-11-18): `gradlew clean test bootJar` con JDK 17 | H2 en memoria | OK: **620 pruebas de backend** (503 de base), 0 fallas; `build/libs/facturacion-arca-1.0.0.jar` construido |
+| Etapa 6: `cd frontend && npm test && npm run build` | n/a (jsdom, sin red) | OK: **244 pruebas** (151 de base), 0 fallas; `tsc` estricto sin errores |
+| Etapa 6: `requests.http` (paginación, filtros nuevos, `?q=`, PDF por factura, reporte) contra `java -jar` con JDK 17 | H2 en memoria | OK, pedido por pedido con `curl` |
+| Etapa 6: recorrido manual en el navegador integrado (Chromium) con backend y frontend reales | H2 en memoria | OK: explorador con `showModal()` real, filtros, paginación, alta, edición, emisión, anulación y eliminación. **Simulados**: `confirm` y `prompt`; algunas cargas se dispararon por `requestSubmit()`/eventos. **No observado**: la descarga real del archivo en el navegador (solo el `href` y `curl`). **Solo jsdom**: doble clic, respuestas obsoletas y errores por campo. **No verificado**: lector de pantalla, zoom real, reflujo y contraste medido en pantalla |
+| Etapa 6: `openspec validate etapa-6-requisitos-docente --strict` | n/a | válido |
 
 Versiones de herramientas no fijadas por la consigna: `io.spring.dependency-management` 1.1.6, `http-server` ^14.1.1, `jsdom` ^25.0.0; `package-lock.json` congela las exactas.
 

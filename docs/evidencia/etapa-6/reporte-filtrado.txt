@@ -1,0 +1,2 @@
+Número	Fecha	Cliente	Condición IVA	Punto de venta	Ítems	Total	Estado	Moneda
+3	2026-10-19	María Electrónica	Consumidor Final	Casa Central	1	29040.00	ANULADA	PES
