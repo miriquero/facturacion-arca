@@ -4,14 +4,133 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="api-base-url" content="http://localhost:8080/api">
-    <title>Facturacion ARCA</title>
+    <title>Facturación ARCA</title>
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
     <main>
-      <h1>Facturacion ARCA</h1>
-      <p>URL base de la API: <code id="estado-api"></code></p>
+      <h1>Facturación ARCA</h1>
+
+      <!-- Región de estado: siempre en el DOM; solo cambia su contenido. -->
+      <div id="estado" role="status" aria-live="polite"></div>
+
+      <section aria-labelledby="titulo-filtros">
+        <h2 id="titulo-filtros">Consulta de facturas</h2>
+        <form id="form-filtros" novalidate>
+          <div class="campo">
+            <label for="filtro-desde">Fecha desde</label>
+            <input id="filtro-desde" name="fechaDesde" type="date">
+          </div>
+          <div class="campo">
+            <label for="filtro-hasta">Fecha hasta</label>
+            <input id="filtro-hasta" name="fechaHasta" type="date">
+          </div>
+          <div class="campo">
+            <label for="filtro-estado">Estado</label>
+            <select id="filtro-estado" name="estado">
+              <option value="">Todos</option>
+              <option value="BORRADOR">BORRADOR</option>
+              <option value="EMITIDA">EMITIDA</option>
+              <option value="ANULADA">ANULADA</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label for="filtro-monto">Monto mínimo</label>
+            <input id="filtro-monto" name="montoMinimo" type="number" step="any" min="0">
+          </div>
+          <div class="botones">
+            <button type="submit" id="buscar">Buscar</button>
+            <button type="button" id="limpiar-filtros">Limpiar filtros</button>
+          </div>
+        </form>
+      </section>
+
+      <section aria-labelledby="titulo-resultados">
+        <h2 id="titulo-resultados">Resultados</h2>
+        <p id="contador"></p>
+        <p id="sin-resultados" hidden>No hay facturas para los filtros elegidos.</p>
+        <p class="descargas">
+          Descargar el resultado:
+          <a id="descarga-pdf" href="#">PDF</a>
+          <a id="descarga-xlsx" href="#">Excel</a>
+        </p>
+        <div class="tabla-scroll" role="region" aria-labelledby="titulo-resultados" tabindex="0">
+          <table id="tabla-facturas">
+            <caption>Facturas que cumplen los filtros</caption>
+            <thead>
+              <tr>
+                <th scope="col">Número</th>
+                <th scope="col">Fecha</th>
+                <th scope="col">Cliente</th>
+                <th scope="col">Condición IVA</th>
+                <th scope="col">Punto de venta</th>
+                <th scope="col">Ítems</th>
+                <th scope="col">Total</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="filas"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="titulo-formulario">
+        <h2 id="titulo-formulario" tabindex="-1">Nuevo borrador</h2>
+        <form id="form-factura" novalidate aria-busy="false">
+          <fieldset id="contenido-formulario">
+            <legend>Datos del borrador</legend>
+            <fieldset class="cabecera">
+              <legend>Cabecera</legend>
+              <div class="campo">
+                <label for="cliente">Cliente</label>
+                <select id="cliente" name="clienteId"></select>
+              </div>
+              <div class="campo">
+                <label for="condicion-iva">Condición frente al IVA</label>
+                <select id="condicion-iva" name="condicionIvaId"></select>
+              </div>
+              <div class="campo">
+                <label for="punto-venta">Punto de venta</label>
+                <select id="punto-venta" name="puntoVentaId"></select>
+              </div>
+              <div class="campo">
+                <label for="tipo-moneda">Moneda</label>
+                <select id="tipo-moneda" name="tipoMonedaId"></select>
+              </div>
+              <div class="campo">
+                <label for="fecha-emision">Fecha de emisión (opcional)</label>
+                <input id="fecha-emision" name="fechaEmision" type="date">
+              </div>
+              <div class="campo">
+                <label for="observaciones">Observaciones (opcional, hasta 500 caracteres)</label>
+                <textarea id="observaciones" name="observaciones" rows="3" maxlength="500"></textarea>
+              </div>
+            </fieldset>
+
+            <fieldset class="renglones">
+              <legend>Renglones</legend>
+              <div id="renglones"></div>
+              <p id="error-detalles" class="error-campo" hidden></p>
+              <button type="button" id="agregar-renglon">Agregar renglón</button>
+            </fieldset>
+
+            <p class="total">
+              Total neto estimado (sin IVA, no vinculante):
+              <output id="total-estimado" for="renglones"></output>
+            </p>
+
+            <div class="botones">
+              <button type="submit" id="guardar">Guardar borrador</button>
+              <button type="button" id="cancelar-edicion" hidden>Cancelar edición</button>
+            </div>
+          </fieldset>
+        </form>
+      </section>
     </main>
+    <footer>
+      <p>URL base de la API: <code id="estado-api"></code></p>
+    </footer>
     <script type="module" src="./dist/app.js"></script>
   </body>
 </html>

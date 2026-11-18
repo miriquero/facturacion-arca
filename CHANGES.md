@@ -217,7 +217,7 @@ Pesos de nota (sobre el 70 % de etapas): E1 20 % · E2 20 % · E3 15 % · E4 25 
 ## FASE 4 — Interfaz (Semanas 9-10, 20 % del 70 %)
 
 ### [C-06] `etapa-5-frontend-typescript`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` archivado 2026-11-18 (151 pruebas de frontend y 503 de backend en verde; circuito recorrido en navegador real; revisión con teclado y lector de pantalla a cargo del estudiante)
 - **Scope**:
   - Cliente HTTP TypeScript estricto (ES2020, sin framework): interfaces de DTO; `FacturaService` con consultas, catálogos, POST/PUT/PATCH estado/DELETE y URLs de reporte; base de API desde `<meta name="api-base-url">`; header `X-Usuario: sistema`; 204 sin parsear JSON; `ApiError` con estado y detalles; error no JSON → mensaje de respaldo; validaciones por campo visibles (US-501, RN-FE-01..05).
   - Consulta/filtros/listado: catálogos en selectores, filtros por fechas, estado y monto mínimo (>= 0 en el formulario), tabla, cantidad de coincidencias, mensaje sin datos, formato de moneda (PES→ARS, DOL→USD, otro código visible) (US-502).

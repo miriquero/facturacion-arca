@@ -1,9 +1,114 @@
-body {
-  font-family: system-ui, sans-serif;
-  margin: 2rem;
+/* Paleta (contraste calculado contra los fondos indicados; ver docs/etapa-5.md):
+   --texto #1a1a1a sobre #ffffff; --apagado #4d4d4d sobre #ffffff; --primario #0b5cad con texto #ffffff;
+   --borde #767676 sobre #ffffff (controles, >= 3:1); --error #a40000 sobre #fdecec; --exito #0b5d1e sobre #e8f5e9. */
+:root {
+  --texto: #1a1a1a;
+  --apagado: #4d4d4d;
+  --fondo: #ffffff;
+  --primario: #0b5cad;
+  --borde: #767676;
+  --error: #a40000;
+  --error-fondo: #fdecec;
+  --exito: #0b5d1e;
+  --exito-fondo: #e8f5e9;
+  --foco: #0b5cad;
 }
 
-code {
-  background: #f0f0f0;
-  padding: 0.1rem 0.3rem;
+* { box-sizing: border-box; }
+
+body {
+  font-family: system-ui, sans-serif;
+  color: var(--texto);
+  background: var(--fondo);
+  margin: 0;
+  line-height: 1.5;
 }
+
+main, footer { max-width: 72rem; margin: 0 auto; padding: 1rem; }
+
+h1, h2 { line-height: 1.2; }
+
+code { background: #f0f0f0; padding: 0.1rem 0.3rem; }
+
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--foco);
+  outline-offset: 2px;
+}
+
+fieldset { border: 1px solid var(--borde); margin: 0 0 1rem; padding: 0.75rem 1rem; min-width: 0; }
+legend { font-weight: bold; padding: 0 0.25rem; }
+fieldset:disabled { color: var(--apagado); }
+
+.campo { display: flex; flex-direction: column; margin-bottom: 0.75rem; max-width: 28rem; }
+.campo label { font-weight: 600; margin-bottom: 0.25rem; }
+
+input, select, textarea {
+  font: inherit;
+  min-height: 2.75rem;
+  padding: 0.25rem 0.5rem;
+  border: 2px solid var(--borde);
+  border-radius: 4px;
+  color: var(--texto);
+  background: var(--fondo);
+}
+
+input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+.error-campo { color: var(--error); font-weight: 600; margin: 0.25rem 0 0; }
+.error-campo::before { content: "Error: "; }
+
+button, .descargas a {
+  font: inherit;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 4px;
+}
+
+button {
+  border: 2px solid var(--primario);
+  background: var(--primario);
+  color: #ffffff;
+  cursor: pointer;
+}
+button[type="button"]:not(#agregar-renglon) { background: #ffffff; color: var(--primario); }
+button:disabled { border-color: var(--borde); background: #e6e6e6; color: var(--apagado); cursor: not-allowed; }
+
+.botones { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.descargas a { display: inline-block; border: 2px solid var(--primario); color: var(--primario); margin-right: 0.5rem; }
+
+#estado { min-height: 2.5rem; padding: 0.5rem 0.75rem; margin: 0.5rem 0 1rem; }
+#estado.estado--exito { background: var(--exito-fondo); color: var(--exito); border-left: 6px solid var(--exito); }
+#estado.estado--error { background: var(--error-fondo); color: var(--error); border-left: 6px solid var(--error); font-weight: 600; }
+#estado.estado--progreso { border-left: 6px solid var(--primario); }
+#estado ul { margin: 0.25rem 0 0; }
+
+.tabla-scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--borde); }
+table { border-collapse: collapse; width: 100%; }
+caption { text-align: left; padding: 0.5rem; font-weight: 600; }
+th, td { border-bottom: 1px solid var(--borde); padding: 0.5rem; text-align: left; vertical-align: top; }
+td.importe { text-align: right; white-space: nowrap; }
+td .botones button { min-height: 2.75rem; }
+
+.estado-fila { font-weight: 600; }
+.estado-fila--BORRADOR::before { content: "● "; }
+.estado-fila--EMITIDA::before { content: "✔ "; }
+.estado-fila--ANULADA::before { content: "✖ "; }
+
+.renglon { background: #f7f7f7; }
+.total output { font-weight: bold; }
