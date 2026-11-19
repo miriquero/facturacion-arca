@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API de Facturación ARCA</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 1rem/1.6 system-ui, sans-serif; margin: 0; }
+    main { max-width: 62rem; margin: auto; padding: 2rem 1rem; }
+    header { border-bottom: 1px solid GrayText; padding-bottom: 1rem; }
+    h1, h2, h3 { line-height: 1.2; }
+    section { margin-block: 2rem; }
+    nav { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; }
+    pre { border: 1px solid GrayText; padding: 1rem; overflow: auto; border-radius: .4rem; }
+    dt { font-weight: 600; margin-top: .75rem; }
+    dd { margin: 0; }
+    code { overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>API de Facturación ARCA</h1>
+    <p>URL base <a id="url-base" href="">/api</a></p>
+    <nav aria-label="Secciones">
+      <a href="#facturas">Facturas</a>
+      <a href="#catalogos">Catálogos</a>
+      <a href="#solicitudes">Cuerpos JSON</a>
+      <a href="#errores">Errores</a>
+    </nav>
+  </header>
+
+  <section id="facturas">
+    <h2>Facturas</h2>
+    <p>Las rutas de esta página se agregan a la URL base. <a data-ruta="/facturas?pagina=0&amp;tamanio=5">Abrir un listado de ejemplo</a>.</p>
+    <dl>
+      <dt><code>GET /facturas</code></dt>
+      <dd>Lista y filtra facturas. Devuelve <code>items</code>, <code>pagina</code>, <code>tamanio</code>,
+        <code>totalElementos</code> y <code>totalPaginas</code>.</dd>
+      <dt><code>GET /facturas/{id}</code></dt>
+      <dd>Devuelve la cabecera y los renglones de una factura. Usá el <code>id</code> del listado.</dd>
+      <dt><code>GET /facturas/{id}/pdf</code></dt>
+      <dd>Descarga el comprobante PDF de una factura emitida o anulada.</dd>
+      <dt><code>GET /facturas/reporte</code></dt>
+      <dd>Descarga un reporte con los filtros del listado. Acepta <code>formato=pdf</code> (predeterminado),
+        <code>xlsx</code> (o <code>excel</code>) y <code>txt</code>.</dd>
+      <dt><code>POST /facturas</code></dt>
+      <dd>Crea un borrador. Devuelve <code>201 Created</code> con la URL del recurso en <code>Location</code>.</dd>
+      <dt><code>PUT /facturas/{id}</code></dt>
+      <dd>Reemplaza la cabecera y todos los renglones de un borrador. Devuelve <code>200 OK</code>.</dd>
+      <dt><code>PATCH /facturas/{id}/estado</code></dt>
+      <dd>Emite un borrador o anula una factura emitida. Devuelve <code>200 OK</code>.
+        La emisión asigna el número y un CAE simulado.</dd>
+      <dt><code>DELETE /facturas/{id}</code></dt>
+      <dd>Elimina un borrador. Devuelve <code>204 No Content</code>.</dd>
+    </dl>
+
+    <h3>Filtros y paginación</h3>
+    <p>El listado y el reporte aceptan <code>fechaDesde</code> y <code>fechaHasta</code> con formato
+      <code>AAAA-MM-DD</code>, <code>estado</code> (<code>BORRADOR</code>, <code>EMITIDA</code> o
+      <code>ANULADA</code>), <code>montoMinimo</code>, <code>numero</code>, <code>clienteId</code>
+      e <code>informada</code> (<code>true</code> o <code>false</code>).</p>
+    <p>El listado también acepta <code>pagina</code> (empieza en 0) y <code>tamanio</code>
+      (10 por defecto, máximo 100).</p>
+  </section>
+
+  <section id="catalogos">
+    <h2>Catálogos</h2>
+    <p>Cada consulta devuelve opciones con <code>id</code>, <code>etiqueta</code>, <code>valor</code>
+      y <code>codigoMoneda</code>. Los dos últimos campos pueden ser nulos.</p>
+    <ul>
+      <li><a data-ruta="/catalogos/puntos-venta"><code>GET /catalogos/puntos-venta</code></a></li>
+      <li><a data-ruta="/catalogos/clientes"><code>GET /catalogos/clientes</code></a> admite <code>?q=texto</code>.</li>
+      <li><a data-ruta="/catalogos/condiciones-iva"><code>GET /catalogos/condiciones-iva</code></a></li>
+      <li><a data-ruta="/catalogos/tipos-moneda"><code>GET /catalogos/tipos-moneda</code></a></li>
+      <li><a data-ruta="/catalogos/lista-precio-articulos"><code>GET /catalogos/lista-precio-articulos</code></a>
+        admite <code>?q=texto</code>.</li>
+    </ul>
+  </section>
+
+  <section id="solicitudes">
+    <h2>Cuerpos JSON</h2>
+    <p>Enviá <code>Content-Type: application/json</code>. Para altas y cambios, <code>X-Usuario</code>
+      indica el usuario de auditoría y es opcional. El encabezado no autentica.</p>
+
+    <h3>Crear o reemplazar un borrador</h3>
+    <p>Consultá los catálogos para obtener los IDs. <code>clienteId</code>, <code>fechaEmision</code>
+      y <code>observaciones</code> son opcionales. Si omitís la fecha, se usa la del servidor.
+      Se requiere al menos un renglón con cantidad positiva. La bonificación (opcional) debe estar entre
+      0 y 100. El servidor toma el precio de la lista y calcula los importes.</p>
+    <pre><code>{
+  "clienteId": null,
+  "condicionIvaId": 1,
+  "puntoVentaId": 1,
+  "tipoMonedaId": 1,
+  "detalles": [
+    {
+      "listaPrecioArticuloId": 1,
+      "cantidad": 2,
+      "porcentajeBonificacion": 0
+    }
+  ]
+}</code></pre>
+
+    <h3>Cambiar el estado</h3>
+    <p>Enviá <code>EMITIDA</code> para emitir o <code>ANULADA</code> para anular.
+      Podés incluir <code>observaciones</code>.</p>
+    <pre><code>{ "estado": "EMITIDA" }</code></pre>
+  </section>
+
+  <section id="errores">
+    <h2>Errores</h2>
+    <p>La API devuelve problemas en JSON. <code>400</code> indica datos inválidos,
+      <code>404</code> un recurso o referencia inexistente y <code>409</code> un conflicto con las reglas de facturación.</p>
+  </section>
+</main>
+<script>
+  const base = new URL(window.location.href);
+  base.pathname = base.pathname.replace(/\/$/, '');
+  base.search = '';
+  base.hash = '';
+  const urlBase = document.getElementById('url-base');
+  urlBase.href = base.href;
+  urlBase.textContent = base.href;
+  for (const enlace of document.querySelectorAll('[data-ruta]')) {
+    enlace.href = base.href + enlace.dataset.ruta;
+  }
+</script>
+</body>
+</html>
