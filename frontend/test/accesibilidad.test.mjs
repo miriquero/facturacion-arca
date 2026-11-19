@@ -223,7 +223,7 @@ test('botones que abren exploradores: nombran que se elige (cliente del formular
   const nombre = (id) => nombreAccesible(t.doc.getElementById(id));
   assert.equal(nombre('elegir-cliente'), 'Elegir cliente');
   assert.equal(nombre('elegir-cliente-filtro'), 'Elegir cliente para filtrar');
-  assert.equal(nombre('quitar-cliente-filtro'), 'Quitar cliente del filtro');
+  assert.equal(nombre('quitar-cliente-filtro'), 'Quitar filtro de cliente');
   const articulos = [...t.doc.querySelectorAll('#renglones button[data-elegir]')].map(nombreAccesible);
   assert.deepEqual(articulos, ['Elegir artículo (renglón 1)', 'Elegir artículo (renglón 2)']);
 });

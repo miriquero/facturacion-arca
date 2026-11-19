@@ -240,8 +240,9 @@ test('Filtros nuevos en el HTML: numero, informada y cliente con salida Todos y 
   assert.equal(t.$('filtro-cliente').tagName, 'OUTPUT');
   assert.equal(t.$('filtro-cliente').textContent, 'Todos');
   assert.equal(t.$('filtro-cliente').hasAttribute('data-id'), false);
-  assert.equal(t.$('elegir-cliente-filtro').textContent, 'Elegir cliente para filtrar');
-  assert.equal(t.$('quitar-cliente-filtro').textContent, 'Quitar cliente del filtro');
+  assert.equal(t.$('elegir-cliente-filtro').textContent, 'Elegir cliente');
+  assert.equal(t.$('filtro-cliente').hidden, true);
+  assert.equal(t.$('quitar-cliente-filtro').hidden, true);
   for (const id of ['filtro-numero', 'filtro-informada', 'filtro-cliente']) {
     assert.ok(t.documento.querySelector(`label[for="${id}"]`), `sin label: ${id}`);
   }
@@ -358,6 +359,9 @@ test('Cliente del filtro: elegir el id 2 con el explorador lo muestra y no busca
   await t.app.listo;
   await elegirClienteDelFiltro(t, 'Ana SA');
   assert.equal(t.$('filtro-cliente').textContent, 'Ana SA');
+  assert.equal(t.$('elegir-cliente-filtro').textContent, 'Cambiar');
+  assert.equal(t.$('filtro-cliente').hidden, false);
+  assert.equal(t.$('quitar-cliente-filtro').hidden, false);
   assert.equal(t.$('filtro-cliente').getAttribute('data-id'), '2');
   assert.equal(t.servicio.de('obtenerFacturas').length, 1);
   assert.equal(t.$('explorador-titulo').textContent, 'Buscar cliente');
@@ -372,6 +376,9 @@ test('Quitar el cliente del filtro: vuelve a Todos y el listado se pide sin clie
   await elegirClienteDelFiltro(t, 'Ana SA');
   t.$('quitar-cliente-filtro').click();
   assert.equal(t.$('filtro-cliente').textContent, 'Todos');
+  assert.equal(t.$('filtro-cliente').hidden, true);
+  assert.equal(t.$('quitar-cliente-filtro').hidden, true);
+  assert.equal(t.documento.activeElement, t.$('elegir-cliente-filtro'));
   assert.equal(t.$('filtro-cliente').hasAttribute('data-id'), false);
   buscar(t);
   await esperarTareas();

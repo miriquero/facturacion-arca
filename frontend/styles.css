@@ -227,6 +227,8 @@ fieldset.renglon {
 fieldset.renglon > legend { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 fieldset.renglon .campo label { font-size: 0.85rem; margin-bottom: 0.125rem; }
 fieldset.renglon .campo output { font-size: 0.9rem; }
+fieldset.renglon .articulo-elegido output[data-id] { font-size: 1rem; font-weight: 700; }
+.lista-articulo { color: var(--apagado); font-size: 0.85rem; }
 fieldset.renglon input { min-height: 2.5rem; }
 fieldset.renglon button { padding: 0.25rem 0.6rem; }
 .dato-renglon { display: flex; flex-direction: column; margin: 0; font-size: 0.85rem; }
@@ -283,9 +285,25 @@ button:not(:disabled):hover { filter: brightness(0.94); }
   fieldset.cabecera .campo:not(.cliente-elegido):not(.ancho-completo) { grid-column: span 1; }
 }
 
-/* Filtro de cliente: ocupa dos columnas para que sus botones no se corten */
+/* El selector y el cliente elegido comparten la fila de los demás filtros. */
 #form-filtros .cliente-filtro { grid-column: span 2; }
-#form-filtros .cliente-filtro .botones { flex-wrap: wrap; }
+.cliente-filtro-controles { display: flex; gap: 0.5rem; align-items: stretch; }
+.cliente-filtro-controles output, .cliente-filtro-controles output[hidden] + button { flex: 1; }
+.cliente-filtro-controles output {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--fondo);
+}
+.cliente-filtro-controles button { flex-shrink: 0; padding-inline: 0.65rem; }
+
+@media (max-width: 32rem) {
+  #form-filtros .cliente-filtro { grid-column: 1 / -1; }
+}
 
 /* Explorador: campo de texto y botón Buscar en una fila, selector de lista debajo */
 #explorador-form { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 0.75rem; align-items: end; }
@@ -299,5 +317,5 @@ dialog#explorador { border: 1px solid var(--linea); border-radius: 10px; box-sha
 #explorador-cancelar { margin-top: 0.25rem; }
 
 /* Cliente elegido: valor destacado y botones alineados con el resto de los campos */
-.cliente-elegido output, .cliente-filtro output { font-size: 1rem; min-height: 2rem; display: flex; align-items: center; }
-.cliente-elegido .botones, .cliente-filtro .botones { margin-top: 0.25rem; }
+.cliente-elegido output { font-size: 1rem; min-height: 2rem; display: flex; align-items: center; }
+.cliente-elegido .botones { margin-top: 0.25rem; }

@@ -47,21 +47,30 @@ export class PantallaListado implements Pantalla {
     const campoMonto = $<HTMLInputElement>('filtro-monto');
     const campoNumero = $<HTMLInputElement>('filtro-numero');
     const salidaCliente = $('filtro-cliente');
+    const elegirFiltro = $<HTMLButtonElement>('elegir-cliente-filtro');
+    const quitarFiltro = $<HTMLButtonElement>('quitar-cliente-filtro');
 
     /** Cliente del filtro: el id vive en data-id de la salida (sin input oculto, que no tendría etiqueta). */
     const ponerClienteFiltro = (opcion: { id: number; etiqueta: string } | null): void => {
       salidaCliente.textContent = opcion === null ? 'Todos' : opcion.etiqueta;
+      salidaCliente.hidden = opcion === null;
+      elegirFiltro.textContent = opcion === null ? 'Elegir cliente' : 'Cambiar';
+      elegirFiltro.setAttribute('aria-label', opcion === null ? 'Elegir cliente para filtrar' : 'Cambiar cliente del filtro');
+      quitarFiltro.hidden = opcion === null;
       if (opcion === null) salidaCliente.removeAttribute('data-id');
       else salidaCliente.setAttribute('data-id', String(opcion.id));
     };
 
     // Elegir el cliente del filtro no busca: solo la acción Buscar pide el listado.
-    $('elegir-cliente-filtro').addEventListener('click', (evento) => {
-      void elegirCliente(evento.currentTarget as HTMLElement).then((opcion) => {
+    elegirFiltro.addEventListener('click', () => {
+      void elegirCliente(elegirFiltro).then((opcion) => {
         if (opcion !== null) ponerClienteFiltro(opcion);
       });
     });
-    $('quitar-cliente-filtro').addEventListener('click', () => ponerClienteFiltro(null));
+    quitarFiltro.addEventListener('click', () => {
+      ponerClienteFiltro(null);
+      elegirFiltro.focus();
+    });
 
     $('form-filtros').addEventListener('submit', (evento) => {
       evento.preventDefault();

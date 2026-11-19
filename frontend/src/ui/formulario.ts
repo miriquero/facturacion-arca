@@ -199,7 +199,10 @@ export class Formulario {
       r.appendChild(div);
     };
     campoDe('listaPrecioArticuloId', 'Artículo', crear(doc, 'output', SIN_ARTICULO));
-    r.querySelector('div.campo')?.appendChild(crear(doc, 'button', undefined, { type: 'button', id: `r${k}-elegir`, 'data-elegir': '' }));
+    const campoArticulo = r.querySelector('div.campo') as HTMLElement;
+    campoArticulo.classList.add('articulo-elegido');
+    campoArticulo.appendChild(crear(doc, 'small', undefined, { class: 'lista-articulo', hidden: '' }));
+    campoArticulo.appendChild(crear(doc, 'button', undefined, { type: 'button', id: `r${k}-elegir`, 'data-elegir': '' }));
     campoDe('cantidad', 'Cantidad', crear(doc, 'input', undefined, { type: 'number', step: 'any', min: '0' }));
     campoDe('porcentajeBonificacion', 'Bonificación %', crear(doc, 'input', undefined, { type: 'number', step: 'any', min: '0', max: '100' }));
     campoDe('descripcion', 'Descripción (opcional, hasta 255 caracteres)', crear(doc, 'input', undefined, { type: 'text', maxlength: '255' }));
@@ -260,8 +263,15 @@ export class Formulario {
         l.textContent = `${l.getAttribute('data-etiqueta')} (renglón ${n})`;
       }
       (r.querySelector('button[data-quitar]') as HTMLElement).textContent = `Quitar renglón ${n}`;
-      (r.querySelector('button[data-elegir]') as HTMLElement).textContent = `Elegir artículo (renglón ${n})`;
+      this.rotularBotonArticulo(r, n);
     });
+  }
+
+  private rotularBotonArticulo(r: HTMLElement, numero: number): void {
+    const boton = r.querySelector('button[data-elegir]') as HTMLButtonElement;
+    const elegido = this.elegidas.has(r);
+    boton.textContent = elegido ? 'Cambiar' : `Elegir artículo (renglón ${numero})`;
+    boton.setAttribute('aria-label', `${elegido ? 'Cambiar' : 'Elegir'} artículo (renglón ${numero})`);
   }
 
   /** Abre el explorador de artículos del renglón; cancelar no cambia nada. */
@@ -275,9 +285,15 @@ export class Formulario {
 
   private ponerArticulo(r: HTMLElement, opcion: OpcionDTO): void {
     const salida = this.campo(r, 'listaPrecioArticuloId');
-    salida.textContent = opcion.etiqueta;
+    // El catálogo devuelve «código - artículo (código de lista)».
+    const etiqueta = /^(.*) \(([A-Z][A-Z0-9_-]*)\)$/.exec(opcion.etiqueta);
+    salida.textContent = etiqueta?.[1] ?? opcion.etiqueta;
+    const lista = r.querySelector('.lista-articulo') as HTMLElement;
+    lista.textContent = etiqueta ? `Lista: ${etiqueta[2]}` : '';
+    lista.hidden = etiqueta === null;
     salida.setAttribute('data-id', String(opcion.id));
     this.elegidas.set(r, opcion);
+    this.rotularBotonArticulo(r, this.renglones().indexOf(r) + 1);
     this.actualizarEstimacion();
   }
 

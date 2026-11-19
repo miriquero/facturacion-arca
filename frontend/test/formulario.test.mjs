@@ -370,12 +370,18 @@ test('Renglon: boton Elegir articulo (renglon N) y salida de la opcion elegida',
 });
 
 test('Elegir el articulo del renglon 1: titulo con el renglon, etiqueta, precio 3.000,00, estimacion y request con id 1', async () => {
-  const t = await arrancar({ crearFactura: fila({ id: 15 }) });
+  const t = await arrancar({
+    crearFactura: fila({ id: 15 }),
+    buscarListaPrecioArticulos: [{ id: 1, etiqueta: 'Martillo (GENERAL)', valor: 3000, codigoMoneda: 'PES' }],
+  });
   t.poner(t.$('tipo-moneda'), '');
   t.poner(t.campo(0, 'cantidad'), '2');
   await t.elegirEn(botonArticulo(t, 0), 'Martillo');
   assert.equal(t.$('explorador-titulo').textContent, 'Buscar artículo de lista de precios (renglón 1)');
   assert.equal(t.campo(0, 'listaPrecioArticuloId').textContent, 'Martillo');
+  assert.equal(t.filas()[0].querySelector('.lista-articulo').textContent, 'Lista: GENERAL');
+  assert.equal(t.filas()[0].querySelector('.lista-articulo').hidden, false);
+  assert.equal(botonArticulo(t, 0).textContent, 'Cambiar');
   assert.equal(t.campo(0, 'listaPrecioArticuloId').getAttribute('data-id'), '1');
   assert.equal(t.filas()[0].querySelector('output[name="precio"]').textContent, '3.000,00');
   assert.equal(t.documento.activeElement, botonArticulo(t, 0));
