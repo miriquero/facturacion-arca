@@ -33,6 +33,7 @@ import ar.edu.utn.frm.facturacion.report.ArchivoReporte;
 import ar.edu.utn.frm.facturacion.report.FormatoReporte;
 import ar.edu.utn.frm.facturacion.report.ReporteFacturasService;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -91,7 +92,7 @@ public class FacturaService {
     @Transactional
     public FacturaReporteDTO crear(FacturaRequestDTO solicitud) {
         Cabecera cabecera = resolverCabecera(solicitud);
-        Renglones renglones = calcularRenglones(solicitud.detalles());
+        Renglones renglones = calcularRenglones(solicitud.detalles(), cabecera.tipoMoneda());
 
         FacturaVenta factura = new FacturaVenta();
         factura.setEstado(EstadoFactura.BORRADOR);
@@ -110,7 +111,7 @@ public class FacturaService {
         FacturaVenta factura = bloquear(id);
         exigirBorrador(factura, "editar");
         Cabecera cabecera = resolverCabecera(solicitud);
-        Renglones renglones = calcularRenglones(solicitud.detalles());
+        Renglones renglones = calcularRenglones(solicitud.detalles(), cabecera.tipoMoneda());
 
         aplicar(factura, solicitud, cabecera, renglones);
         factura.registrarModificacion();
@@ -224,7 +225,7 @@ public class FacturaService {
      * Resuelve cada lista-artículo (404), calcula con {@link CalculadoraImportes} y convierte cada importe con
      * {@link ImporteDouble} (409). No toca ninguna entidad administrada.
      */
-    private Renglones calcularRenglones(List<FacturaDetalleRequestDTO> solicitados) {
+    private Renglones calcularRenglones(List<FacturaDetalleRequestDTO> solicitados, TipoMoneda moneda) {
         List<FacturaVentaDetalle> lista = new ArrayList<>();
         List<BigDecimal> subtotales = new ArrayList<>();
         for (FacturaDetalleRequestDTO pedido : solicitados) {
@@ -232,7 +233,7 @@ public class FacturaService {
                     .orElseThrow(() -> new RecursoNoEncontradoException("Lista de precios del artículo",
                             pedido.listaPrecioArticuloId()));
             Articulo articulo = oferta.getArticulo();
-            BigDecimal precio = decimalDe(oferta.getPrecioVenta(), "precioUnitario");
+            BigDecimal precio = precioEn(moneda, oferta.getPrecioVenta());
             BigDecimal alicuota = articulo.getAlicuotaIva() == null ? propiedades.ivaPorDefecto()
                     : decimalDe(articulo.getAlicuotaIva(), "alicuotaIva");
             BigDecimal bonificacion = pedido.porcentajeBonificacion() == null ? BigDecimal.ZERO
@@ -256,6 +257,18 @@ public class FacturaService {
         BigDecimal saldo = calculadora.saldo(total, BigDecimal.ZERO);
         return new Renglones(lista, ImporteDouble.aDouble(total, "importeTotal"),
                 ImporteDouble.aDouble(saldo, "importeSaldo"));
+    }
+
+    /**
+     * Precio unitario en la moneda de la factura. El precio de lista está en pesos: en pesos se usa tal cual y en
+     * otra moneda se divide por su cotización (pesos por unidad) y se redondea a dos decimales con HALF_UP, para
+     * que el valor siga siendo exacto al guardarlo como {@code double}.
+     */
+    private BigDecimal precioEn(TipoMoneda moneda, double precioDeLista) {
+        BigDecimal precio = decimalDe(precioDeLista, "precioUnitario");
+        BigDecimal cotizacion = propiedades.cotizacionDe(moneda.getCodigoAfip());
+        return cotizacion.compareTo(BigDecimal.ONE) == 0 ? precio
+                : precio.divide(cotizacion, 2, RoundingMode.HALF_UP);
     }
 
     /** Lee un {@code double} guardado como decimal exacto; un valor no finito no se puede usar para calcular. */

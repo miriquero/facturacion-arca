@@ -28,7 +28,7 @@ class UsuarioActualInterceptorTest {
     @Mock
     private UsuarioRepository usuarios;
 
-    private final FacturacionProperties propiedades = new FacturacionProperties(new BigDecimal("21"), "sistema");
+    private final FacturacionProperties propiedades = new FacturacionProperties(new BigDecimal("21"), "sistema", null, null);
 
     @AfterEach
     void limpiar() {

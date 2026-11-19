@@ -406,7 +406,7 @@ class FacturaEscrituraIntegracionTest extends IntegracionApiBase {
 
         org.assertj.core.api.Assertions.assertThat(renglonesAntes).isEqualTo(2);
         org.assertj.core.api.Assertions.assertThat(editada.get("id").asLong()).isEqualTo(id);
-        org.assertj.core.api.Assertions.assertThat(editada.get("importeTotal").asDouble()).isEqualTo(9680.0);
+        org.assertj.core.api.Assertions.assertThat(editada.get("importeTotal").asDouble()).isEqualTo(6.24); // 8000 / 1550 = 5,16 + IVA 1,08
         org.assertj.core.api.Assertions.assertThat(editada.get("cantidadItems").asInt()).isEqualTo(1);
         org.assertj.core.api.Assertions.assertThat(editada.get("clienteDenominacion").asText())
                 .isEqualTo("Consumidor Final");

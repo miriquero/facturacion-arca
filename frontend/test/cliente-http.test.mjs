@@ -277,3 +277,15 @@ test('urlPdfFactura(7) sobre la base configurada (con y sin barra final)', () =>
   assert.equal(new FacturaService('http://localhost:8080/api', fetchFalso()).urlPdfFactura(7), 'http://localhost:8080/api/facturas/7/pdf');
   assert.equal(new FacturaService('http://localhost:8080/api/', fetchFalso()).urlPdfFactura(12), 'http://localhost:8080/api/facturas/12/pdf');
 });
+
+test('buscarListaPrecioArticulos con listaId: lo agrega a la consulta junto con q', async () => {
+  const f = fetchFalso();
+  await new FacturaService('http://x/api', f).buscarListaPrecioArticulos(' martillo ', 2);
+  assert.equal(f.llamadas[0].url, 'http://x/api/catalogos/lista-precio-articulos?q=martillo&listaId=2');
+});
+
+test('obtenerListasPrecio pide /catalogos/listas-precio', async () => {
+  const f = fetchFalso();
+  await new FacturaService('http://x/api', f).obtenerListasPrecio();
+  assert.equal(f.llamadas[0].url, 'http://x/api/catalogos/listas-precio');
+});

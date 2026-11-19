@@ -29,10 +29,37 @@ class CatalogoApiIntegracionTest extends IntegracionApiBase {
                 .andExpect(jsonPath("$[0].id").value(enGeneral.getId()))
                 .andExpect(jsonPath("$[0].etiqueta").value("ART-001 - Martillo (GENERAL)"))
                 .andExpect(jsonPath("$[0].valor").value(3000.00))
-                .andExpect(jsonPath("$[0].codigoMoneda").isEmpty())
+                .andExpect(jsonPath("$[0].codigoMoneda").value("PES"))
                 .andExpect(jsonPath("$[1].id").value(enMayorista.getId()))
                 .andExpect(jsonPath("$[1].etiqueta").value("ART-001 - Martillo (MAYORISTA)"))
                 .andExpect(jsonPath("$[1].valor").value(2500.00));
+    }
+
+    @Test
+    void listasPrecioSeExponenYListaIdFiltraLasOfertas() throws Exception {
+        var general = guardarLista("GENERAL", "Lista general");
+        var mayorista = guardarLista("MAYORISTA", "Lista mayorista");
+        var martillo = guardarArticulo("ART-001", "Martillo");
+        guardarPrecio(general, martillo, 3000.00);
+        var enMayorista = guardarPrecio(mayorista, martillo, 2500.00);
+
+        mvc.perform(get("/api/catalogos/listas-precio"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(general.getId()))
+                .andExpect(jsonPath("$[0].etiqueta").value("GENERAL - Lista general"))
+                .andExpect(jsonPath("$[1].etiqueta").value("MAYORISTA - Lista mayorista"));
+
+        mvc.perform(get("/api/catalogos/lista-precio-articulos").param("listaId", String.valueOf(mayorista.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(enMayorista.getId()))
+                .andExpect(jsonPath("$[0].valor").value(2500.00));
+
+        mvc.perform(get("/api/catalogos/lista-precio-articulos")
+                        .param("listaId", String.valueOf(mayorista.getId())).param("q", "zzz"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test
@@ -45,6 +72,7 @@ class CatalogoApiIntegracionTest extends IntegracionApiBase {
                 .andExpect(jsonPath("$[0].etiqueta").value("Responsable Inscripto"));
         mvc.perform(get("/api/catalogos/tipos-moneda")).andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].etiqueta").value("Pesos"))
+                .andExpect(jsonPath("$[0].valor").value(1.0))
                 .andExpect(jsonPath("$[0].codigoMoneda").value("PES"));
     }
 

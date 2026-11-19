@@ -13,7 +13,9 @@ export interface VentanaModal {
 export interface ConfigExplorador {
   titulo: string;
   /** Pide las opciones al servidor; el texto vacío trae el catálogo completo. */
-  buscar(q: string): Promise<OpcionDTO[]>;
+  buscar(q: string, listaId?: number): Promise<OpcionDTO[]>;
+  /** Si está, la ventana muestra un selector de lista de precios con estas opciones (más "Todas las listas"). */
+  listas?: () => Promise<OpcionDTO[]>;
   /** Muestra el precio de cada opción junto a su etiqueta (artículos). */
   conPrecio?: boolean;
 }
@@ -27,6 +29,8 @@ export class Explorador {
   private readonly dialogo: HTMLDialogElement;
   private readonly titulo: HTMLElement;
   private readonly campo: HTMLInputElement;
+  private readonly campoLista: HTMLElement;
+  private readonly selectorLista: HTMLSelectElement;
   private readonly cantidad: HTMLElement;
   private readonly error: HTMLElement;
   private readonly vacio: HTMLElement;
@@ -45,6 +49,8 @@ export class Explorador {
     this.dialogo = e<HTMLDialogElement>('explorador');
     this.titulo = e('explorador-titulo');
     this.campo = e<HTMLInputElement>('explorador-q');
+    this.campoLista = e('explorador-lista-campo');
+    this.selectorLista = e<HTMLSelectElement>('explorador-lista');
     this.cantidad = e('explorador-cantidad');
     this.error = e('explorador-error');
     this.vacio = e('explorador-vacio');
@@ -54,6 +60,7 @@ export class Explorador {
       evento.preventDefault();
       void this.buscar(this.campo.value);
     });
+    this.selectorLista.addEventListener('change', () => void this.buscar(this.campo.value));
     e('explorador-cancelar').addEventListener('click', () => this.terminar(null));
     // Escape: el navegador dispara `cancel` y cierra solo; se cancela ese cierre para cerrar siempre por código
     // (así se resuelve la promesa y el foco vuelve al botón que abrió la ventana).
@@ -72,6 +79,7 @@ export class Explorador {
     this.disparador = disparador;
     this.titulo.textContent = config.titulo;
     this.campo.value = '';
+    this.prepararListas(config);
     this.cantidad.textContent = '';
     this.error.hidden = true;
     this.error.textContent = '';
@@ -83,6 +91,26 @@ export class Explorador {
       this.campo.focus();
       void this.buscar('');
     });
+  }
+
+  /** Muestra u oculta el selector de lista y, si corresponde, lo llena con las listas del servidor. */
+  private prepararListas(config: ConfigExplorador): void {
+    reemplazarHijos(this.selectorLista, [crear(this.doc, 'option', 'Todas las listas', { value: '' })]);
+    this.selectorLista.value = '';
+    this.campoLista.hidden = config.listas === undefined;
+    if (config.listas === undefined) return;
+    config.listas().then(
+      (listas) => {
+        if (this.config !== config || this.resolver === null) return;
+        const actual = this.selectorLista.value;
+        reemplazarHijos(this.selectorLista, [
+          crear(this.doc, 'option', 'Todas las listas', { value: '' }),
+          ...listas.map((l) => crear(this.doc, 'option', l.etiqueta, { value: String(l.id) })),
+        ]);
+        this.selectorLista.value = actual;
+      },
+      () => undefined, // sin listas el selector queda en "Todas" y la búsqueda sigue funcionando
+    );
   }
 
   /** Cierra la ventana desde afuera (al salir de la pantalla); equivale a cancelar. */
@@ -105,7 +133,7 @@ export class Explorador {
     if (config === null) return;
     const id = this.busquedas.iniciar();
     try {
-      const opciones = await config.buscar(texto.trim());
+      const opciones = await config.buscar(texto.trim(), this.listaElegida());
       if (!this.busquedas.esVigente(id)) return;
       this.error.hidden = true;
       this.error.textContent = '';
@@ -115,6 +143,11 @@ export class Explorador {
       this.error.textContent = e instanceof ApiError ? e.message : 'Ocurrió un error inesperado.';
       this.error.hidden = false;
     }
+  }
+
+  private listaElegida(): number | undefined {
+    if (this.campoLista.hidden || this.selectorLista.value === '') return undefined;
+    return Number(this.selectorLista.value);
   }
 
   private mostrar(opciones: OpcionDTO[], conPrecio: boolean): void {

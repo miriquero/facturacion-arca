@@ -14,7 +14,8 @@ export interface ApiFacturas {
   crearFactura(req: FacturaRequestDTO): Promise<FacturaReporteDTO>;
   actualizarFactura(id: number, req: FacturaRequestDTO): Promise<FacturaReporteDTO>;
   buscarClientes(q: string): Promise<OpcionDTO[]>;
-  buscarListaPrecioArticulos(q: string): Promise<OpcionDTO[]>;
+  buscarListaPrecioArticulos(q: string, listaId?: number): Promise<OpcionDTO[]>;
+  obtenerListasPrecio(): Promise<OpcionDTO[]>;
   urlReporte(filtros: FacturaFiltrosDTO, formato: FormatoReporte): string;
   urlPdfFactura(id: number): string;
 }

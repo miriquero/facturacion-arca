@@ -298,3 +298,67 @@ test('cerrar() sin explorador abierto no hace nada y el siguiente elegir() funci
   [...t.$('explorador-resultados').querySelectorAll('button')][0].click();
   assert.deepEqual(await promesa, CLIENTES[0]);
 });
+
+// ---- Selector de lista de precios (observaciones del TP) ----
+
+const LISTAS = [
+  { id: 1, etiqueta: 'GENERAL - Lista general', valor: null, codigoMoneda: null },
+  { id: 2, etiqueta: 'MAYORISTA - Lista mayorista (-15%)', valor: null, codigoMoneda: null },
+];
+
+function montarConListas() {
+  const t = montar();
+  const pedidas = [];
+  const buscarConLista = (q, listaId) => {
+    const d = diferido();
+    pedidas.push({ q, listaId, resolver: d.resolver });
+    return d.promesa;
+  };
+  const listas = diferido();
+  const promesa = t.explorador.elegir({ titulo: 'Buscar artículo', buscar: buscarConLista, listas: () => listas.promesa }, t.disparador);
+  const opcionesLista = () => [...t.$('explorador-lista').options].map((o) => [o.value, o.textContent]);
+  return { ...t, pedidas, listas, promesa, opcionesLista };
+}
+
+test('Sin listas configuradas el selector de lista queda oculto y se busca sin listaId', async () => {
+  const t = montar();
+  t.abrir();
+  assert.equal(t.$('explorador-lista-campo').hidden, true);
+  assert.deepEqual(t.busquedas.map((b) => b.q), ['']);
+});
+
+test('Con listas: selector visible con su etiqueta, "Todas las listas" y las listas del servidor', async () => {
+  const t = montarConListas();
+  assert.equal(t.$('explorador-lista-campo').hidden, false);
+  assert.equal(t.doc.querySelector('label[for="explorador-lista"]').textContent, 'Lista de precios');
+  t.listas.resolver(LISTAS);
+  await esperarTareas();
+  assert.deepEqual(t.opcionesLista(), [['', 'Todas las listas'], ['1', 'GENERAL - Lista general'], ['2', 'MAYORISTA - Lista mayorista (-15%)']]);
+  assert.equal(t.pedidas[0].listaId, undefined);
+});
+
+test('Elegir una lista vuelve a buscar con su id y conserva el texto; volver a "Todas" quita el filtro', async () => {
+  const t = montarConListas();
+  t.listas.resolver(LISTAS);
+  await esperarTareas();
+  t.$('explorador-q').value = 'mart';
+  const selector = t.$('explorador-lista');
+  selector.value = '2';
+  selector.dispatchEvent(new t.ventana.Event('change', { bubbles: true }));
+  await esperarTareas();
+  assert.deepEqual(t.pedidas.at(-1), { ...t.pedidas.at(-1), q: 'mart', listaId: 2 });
+  selector.value = '';
+  selector.dispatchEvent(new t.ventana.Event('change', { bubbles: true }));
+  await esperarTareas();
+  assert.equal(t.pedidas.at(-1).q, 'mart');
+  assert.equal(t.pedidas.at(-1).listaId, undefined);
+});
+
+test('Si falla la carga de listas la busqueda sigue andando con "Todas las listas"', async () => {
+  const t = montar();
+  const pedidas = [];
+  t.explorador.elegir({ titulo: 'Buscar artículo', buscar: (q, l) => { pedidas.push([q, l]); return Promise.resolve([]); }, listas: () => Promise.reject(new Error('caido')) }, t.disparador);
+  await esperarTareas();
+  assert.deepEqual([...t.$('explorador-lista').options].map((o) => o.value), ['']);
+  assert.deepEqual(pedidas, [['', undefined]]);
+});

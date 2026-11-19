@@ -19,6 +19,11 @@ spring:
 facturacion:
   iva-por-defecto: 21
   usuario-por-defecto: sistema
+  # Los precios de lista están en pesos. Cotizaciones: pesos que vale una unidad de cada moneda.
+  moneda-base: PES
+  cotizaciones:
+    PES: 1
+    DOL: 1550
   cors:
     # Orígenes del frontend local que pueden leer la API desde un navegador (no es autenticación).
     allowed-origins:

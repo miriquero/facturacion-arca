@@ -41,7 +41,7 @@
             <label for="filtro-hasta">Fecha hasta</label>
             <input id="filtro-hasta" name="fechaHasta" type="date">
           </div>
-          <div class="campo">
+          <div class="campo cliente-filtro">
             <label for="filtro-cliente">Cliente</label>
             <output id="filtro-cliente">Todos</output>
             <div class="botones">
@@ -129,7 +129,7 @@
             <legend>Datos del borrador</legend>
             <fieldset class="cabecera">
               <legend>Cabecera</legend>
-              <div class="campo">
+              <div class="campo cliente-elegido">
                 <label for="cliente">Cliente</label>
                 <output id="cliente">Consumidor Final</output>
                 <div class="botones">
@@ -153,7 +153,7 @@
                 <label for="fecha-emision">Fecha de emisión (opcional)</label>
                 <input id="fecha-emision" name="fechaEmision" type="date">
               </div>
-              <div class="campo">
+              <div class="campo ancho-completo">
                 <label for="observaciones">Observaciones (opcional, hasta 500 caracteres)</label>
                 <textarea id="observaciones" name="observaciones" rows="3" maxlength="500"></textarea>
               </div>
@@ -194,6 +194,10 @@
         <div class="campo">
           <label for="explorador-q">Texto a buscar</label>
           <input id="explorador-q" name="q" type="text" enterkeyhint="search" autocomplete="off">
+        </div>
+        <div class="campo" id="explorador-lista-campo" hidden>
+          <label for="explorador-lista">Lista de precios</label>
+          <select id="explorador-lista" name="listaId"><option value="">Todas las listas</option></select>
         </div>
         <button type="submit" id="explorador-buscar">Buscar</button>
       </form>

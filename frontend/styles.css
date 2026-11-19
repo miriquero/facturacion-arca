@@ -27,9 +27,9 @@ body {
   line-height: 1.5;
 }
 
-main, footer, header { max-width: 72rem; margin: 0 auto; padding: 1rem; }
+main, footer, header { max-width: 78rem; margin: 0 auto; padding: 0.5rem 1rem; }
 
-h1, h2 { line-height: 1.2; }
+h1, h2 { line-height: 1.2; margin: 0.5rem 0; }
 
 code { background: #f0f0f0; padding: 0.1rem 0.3rem; }
 
@@ -50,11 +50,11 @@ code { background: #f0f0f0; padding: 0.1rem 0.3rem; }
   outline-offset: 2px;
 }
 
-fieldset { border: 1px solid var(--borde); margin: 0 0 1rem; padding: 0.75rem 1rem; min-width: 0; }
+fieldset { border: 1px solid var(--borde); margin: 0 0 0.5rem; padding: 0.5rem 0.75rem; min-width: 0; }
 legend { font-weight: bold; padding: 0 0.25rem; }
 fieldset:disabled { color: var(--apagado); }
 
-.campo { display: flex; flex-direction: column; margin-bottom: 0.75rem; max-width: 28rem; }
+.campo { display: flex; flex-direction: column; margin-bottom: 0; min-width: 0; }
 .campo label { font-weight: 600; margin-bottom: 0.25rem; }
 
 input, select, textarea {
@@ -95,7 +95,8 @@ button:disabled { border-color: var(--borde); background: #e6e6e6; color: var(--
 
 .descargas a { display: inline-block; border: 2px solid var(--primario); color: var(--primario); margin-right: 0.5rem; }
 
-#estado { min-height: 2.5rem; padding: 0.5rem 0.75rem; margin: 0.5rem 0 1rem; }
+#estado { padding: 0.5rem 0.75rem; margin: 0.25rem 0 0.5rem; }
+#estado:empty { padding: 0; margin: 0; }
 #estado.estado--exito { background: var(--exito-fondo); color: var(--exito); border-left: 6px solid var(--exito); }
 #estado.estado--error { background: var(--error-fondo); color: var(--error); border-left: 6px solid var(--error); font-weight: 600; }
 #estado.estado--progreso { border-left: 6px solid var(--primario); }
@@ -113,7 +114,7 @@ td .botones button { min-height: 2.75rem; }
 .estado-fila--EMITIDA::before { content: "✔ "; }
 .estado-fila--ANULADA::before { content: "✖ "; }
 
-.renglon { background: #f7f7f7; }
+
 .total output { font-weight: bold; }
 
 /* Paginación de la grilla */
@@ -194,3 +195,109 @@ dl.datos dd { margin: 0; overflow-wrap: anywhere; }
   dl.datos { grid-template-columns: 1fr; }
   dl.datos dd { margin-bottom: 0.5rem; }
 }
+
+/* ---- Pantalla compacta (observaciones del TP): campos en cuadrícula y un renglón por fila ---- */
+
+/* El grupo que deshabilita todo el formulario no necesita borde ni margen propios */
+#contenido-formulario { border: 0; padding: 0; margin: 0; }
+#contenido-formulario > legend { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Cabecera y filtros: varios campos por fila en vez de una sola columna */
+fieldset.cabecera, #form-filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.5rem 1rem;
+  align-items: start;
+}
+fieldset.cabecera .ancho-completo, #form-filtros .botones { grid-column: 1 / -1; }
+fieldset.cabecera legend, fieldset.renglones legend { font-size: 0.95rem; }
+
+/* Un ítem por fila: artículo, cantidad, bonificación, descripción, precio, subtotal y quitar */
+#renglones { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem; }
+fieldset.renglon {
+  display: grid;
+  grid-template-columns: minmax(11rem, 2.2fr) minmax(5.5rem, 0.7fr) minmax(5.5rem, 0.7fr) minmax(9rem, 1.6fr) minmax(7rem, 1fr) minmax(7rem, 1fr) auto;
+  gap: 0.25rem 0.75rem;
+  align-items: end;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: #f7f7f7;
+}
+/* La leyenda "Renglón N" sigue para los lectores de pantalla, pero no ocupa una línea */
+fieldset.renglon > legend { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+fieldset.renglon .campo label { font-size: 0.85rem; margin-bottom: 0.125rem; }
+fieldset.renglon .campo output { font-size: 0.9rem; }
+fieldset.renglon input { min-height: 2.5rem; }
+fieldset.renglon button { padding: 0.25rem 0.6rem; }
+.dato-renglon { display: flex; flex-direction: column; margin: 0; font-size: 0.85rem; }
+.dato-renglon output { font-size: 1rem; min-height: 2.5rem; display: flex; align-items: center; }
+@media (max-width: 62rem) {
+  fieldset.renglon { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+}
+
+/* ---- Pulido visual ---- */
+:root { --superficie: #f6f8fb; --linea: #c9d1dc; }
+body { background: #eef2f7; }
+header { background: #ffffff; max-width: none; border-bottom: 1px solid var(--linea); }
+header > * { max-width: 78rem; margin-left: auto; margin-right: auto; }
+main { background: transparent; }
+h1 { font-size: 1.6rem; }
+h2 { font-size: 1.25rem; }
+
+fieldset { background: #ffffff; border: 1px solid var(--linea); border-radius: 8px; padding: 0.6rem 0.9rem 0.8rem; }
+fieldset > legend { color: var(--primario); font-size: 0.95rem; letter-spacing: 0.02em; text-transform: uppercase; }
+#contenido-formulario { background: transparent; }
+input, select, textarea { border-width: 1px; border-radius: 6px; }
+button, .descargas a { border-radius: 6px; font-weight: 600; }
+button[type="button"]:not(#agregar-renglon) { border-width: 1px; }
+.campo label { font-size: 0.9rem; }
+
+.cliente-elegido { grid-column: span 2; }
+.cliente-elegido output { min-height: 1.5rem; margin-bottom: 0.25rem; }
+.cliente-elegido .botones { flex-wrap: nowrap; }
+
+/* Renglones: tarjetas livianas, valores alineados a los campos */
+fieldset.renglon { background: var(--superficie); border-radius: 8px; align-items: end; }
+.dato-renglon { color: var(--apagado); font-weight: 600; }
+.dato-renglon output { color: var(--texto); justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.dato-renglon output:empty::before { content: "—"; color: var(--apagado); font-weight: 400; }
+.dato-renglon:last-of-type output { font-weight: 700; }
+fieldset.renglon [data-quitar] { border-color: var(--error); color: var(--error); }
+fieldset.renglon [data-quitar]:hover { background: var(--error-fondo); }
+#agregar-renglon { align-self: flex-start; }
+
+/* Total estimado como barra destacada */
+p.total { display: flex; justify-content: flex-end; align-items: baseline; gap: 0.75rem; background: #ffffff;
+  border: 1px solid var(--linea); border-radius: 8px; padding: 0.6rem 1rem; margin: 0.5rem 0; }
+p.total output { font-size: 1.3rem; color: var(--primario); font-variant-numeric: tabular-nums; }
+
+/* Tabla del listado */
+.tabla-scroll { background: #ffffff; border-radius: 8px; border-color: var(--linea); }
+thead th { background: var(--superficie); }
+tbody tr:hover { background: #f3f7fc; }
+button:not(:disabled):hover { filter: brightness(0.94); }
+
+@media (min-width: 62rem) {
+  fieldset.cabecera { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  fieldset.cabecera .cliente-elegido { grid-column: span 2; }
+  fieldset.cabecera .campo:not(.cliente-elegido):not(.ancho-completo) { grid-column: span 1; }
+}
+
+/* Filtro de cliente: ocupa dos columnas para que sus botones no se corten */
+#form-filtros .cliente-filtro { grid-column: span 2; }
+#form-filtros .cliente-filtro .botones { flex-wrap: wrap; }
+
+/* Explorador: campo de texto y botón Buscar en una fila, selector de lista debajo */
+#explorador-form { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 0.75rem; align-items: end; }
+#explorador-form .campo { grid-column: 1; }
+#explorador-form #explorador-buscar { grid-column: 2; }
+#explorador-form #explorador-lista-campo { grid-column: 1 / -1; grid-row: 2; }
+#explorador-cantidad { margin: 0.75rem 0 0.25rem; color: var(--apagado); font-weight: 600; }
+dialog#explorador { border: 1px solid var(--linea); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
+#explorador-resultados button { background: var(--superficie); }
+#explorador-resultados button:hover { background: #e4eefa; }
+#explorador-cancelar { margin-top: 0.25rem; }
+
+/* Cliente elegido: valor destacado y botones alineados con el resto de los campos */
+.cliente-elegido output, .cliente-filtro output { font-size: 1rem; min-height: 2rem; display: flex; align-items: center; }
+.cliente-elegido .botones, .cliente-filtro .botones { margin-top: 0.25rem; }

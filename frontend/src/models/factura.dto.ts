@@ -105,6 +105,11 @@ export interface SolicitudPagina {
   tamanio: number;
 }
 
+/**
+ * Opción de un catálogo. En `tipos-moneda`, `valor` es la cotización: pesos que vale una unidad de la moneda
+ * (PES = 1, DOL = 1550). En `lista-precio-articulos`, `valor` es el precio de lista y `codigoMoneda` su moneda
+ * (pesos); el servidor lo divide por la cotización al guardar una factura en otra moneda.
+ */
 export interface OpcionDTO {
   id: number;
   etiqueta: string;

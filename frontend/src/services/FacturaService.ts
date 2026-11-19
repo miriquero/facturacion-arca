@@ -103,8 +103,14 @@ export class FacturaService {
     return this.enviar<OpcionDTO[]>(conQuery('/catalogos/clientes', consultaTexto(q)), 'GET');
   }
 
-  buscarListaPrecioArticulos(q: string): Promise<OpcionDTO[]> {
-    return this.enviar<OpcionDTO[]>(conQuery('/catalogos/lista-precio-articulos', consultaTexto(q)), 'GET');
+  buscarListaPrecioArticulos(q: string, listaId?: number): Promise<OpcionDTO[]> {
+    const params = consultaTexto(q);
+    if (listaId !== undefined) params.set('listaId', String(listaId));
+    return this.enviar<OpcionDTO[]>(conQuery('/catalogos/lista-precio-articulos', params), 'GET');
+  }
+
+  obtenerListasPrecio(): Promise<OpcionDTO[]> {
+    return this.enviar<OpcionDTO[]>('/catalogos/listas-precio', 'GET');
   }
 
   urlPdfFactura(id: number): string {

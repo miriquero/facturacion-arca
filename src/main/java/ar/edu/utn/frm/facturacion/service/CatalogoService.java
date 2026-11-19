@@ -1,10 +1,12 @@
 package ar.edu.utn.frm.facturacion.service;
 
+import ar.edu.utn.frm.facturacion.config.FacturacionProperties;
 import ar.edu.utn.frm.facturacion.dto.OpcionDTO;
 import ar.edu.utn.frm.facturacion.model.Cliente;
 import ar.edu.utn.frm.facturacion.repository.ClienteRepository;
 import ar.edu.utn.frm.facturacion.repository.CondicionIvaRepository;
 import ar.edu.utn.frm.facturacion.repository.ListaPrecioArticuloRepository;
+import ar.edu.utn.frm.facturacion.repository.ListaPrecioRepository;
 import ar.edu.utn.frm.facturacion.repository.PuntoVentaRepository;
 import ar.edu.utn.frm.facturacion.repository.TipoMonedaRepository;
 import java.util.List;
@@ -24,10 +26,15 @@ public class CatalogoService {
     private final CondicionIvaRepository condicionIvaRepository;
     private final TipoMonedaRepository tipoMonedaRepository;
     private final ListaPrecioArticuloRepository listaPrecioArticuloRepository;
+    private final ListaPrecioRepository listaPrecioRepository;
+    private final FacturacionProperties propiedades;
 
     public CatalogoService(PuntoVentaRepository puntoVentaRepository, ClienteRepository clienteRepository,
             CondicionIvaRepository condicionIvaRepository, TipoMonedaRepository tipoMonedaRepository,
-            ListaPrecioArticuloRepository listaPrecioArticuloRepository) {
+            ListaPrecioArticuloRepository listaPrecioArticuloRepository, ListaPrecioRepository listaPrecioRepository,
+            FacturacionProperties propiedades) {
+        this.listaPrecioRepository = listaPrecioRepository;
+        this.propiedades = propiedades;
         this.puntoVentaRepository = puntoVentaRepository;
         this.clienteRepository = clienteRepository;
         this.condicionIvaRepository = condicionIvaRepository;
@@ -68,10 +75,14 @@ public class CatalogoService {
                 .toList();
     }
 
-    /** El código de moneda viaja en {@code codigoMoneda}. */
+    /**
+     * El código de moneda viaja en {@code codigoMoneda} y la cotización (pesos por unidad de la moneda) en
+     * {@code valor}: el frontend la usa para mostrar el precio convertido.
+     */
     public List<OpcionDTO> tiposMoneda() {
         return tipoMonedaRepository.findAll(POR_ID).stream()
-                .map(m -> new OpcionDTO(m.getId(), m.getDenominacion(), null, m.getCodigoAfip()))
+                .map(m -> new OpcionDTO(m.getId(), m.getDenominacion(),
+                        propiedades.cotizacionDe(m.getCodigoAfip()).doubleValue(), m.getCodigoAfip()))
                 .toList();
     }
 
@@ -83,14 +94,27 @@ public class CatalogoService {
         return listaPrecioArticulos(null);
     }
 
+    /** Etiqueta: código y denominación de la lista (por ejemplo {@code MAYORISTA - Lista mayorista}). */
+    public List<OpcionDTO> listasPrecio() {
+        return listaPrecioRepository.findAll(POR_ID).stream()
+                .map(l -> new OpcionDTO(l.getId(), l.getCodigo() + " - " + l.getDenominacion(), null, null))
+                .toList();
+    }
+
     /** Búsqueda por código o denominación del artículo o por código de lista; sin texto, todas las ofertas. */
     public List<OpcionDTO> listaPrecioArticulos(String q) {
+        return listaPrecioArticulos(q, null);
+    }
+
+    /** Igual que la búsqueda por texto, pero limitada a una lista de precios cuando {@code listaId} no es nulo. */
+    public List<OpcionDTO> listaPrecioArticulos(String q, Long listaId) {
         return PatronBusqueda.de(q)
                 .map(listaPrecioArticuloRepository::buscarConArticuloYLista)
                 .orElseGet(listaPrecioArticuloRepository::findAllConArticuloYLista).stream()
+                .filter(o -> listaId == null || listaId.equals(o.getListaPrecio().getId()))
                 .map(o -> new OpcionDTO(o.getId(), o.getArticulo().getCodigo() + " - "
                         + o.getArticulo().getDenominacion() + " (" + o.getListaPrecio().getCodigo() + ")",
-                        o.getPrecioVenta(), null))
+                        o.getPrecioVenta(), propiedades.monedaBase()))
                 .toList();
     }
 }

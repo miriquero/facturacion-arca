@@ -1,6 +1,6 @@
 import type { Catalogos, FacturaDetalladaDTO, FacturaDetalleDTO, OpcionDTO } from '../models/factura.dto.js';
 import { crear, limpiarInvalido, marcarInvalido, opcion, reemplazarHijos } from './dom.js';
-import { netoEstimado, type RenglonEstimable } from './estimacion.js';
+import { netoEstimado, precioEnMoneda, type RenglonEstimable } from './estimacion.js';
 import { formatearDecimal, formatearImporte } from './formato.js';
 import type { FormularioTexto, RenglonTexto } from './validacion.js';
 
@@ -131,7 +131,7 @@ export class Formulario {
     reemplazarHijos(this.contenedor, []);
     for (const det of d.detalles) {
       const r = this.agregarRenglon();
-      this.ponerArticulo(r, this.opcionDeArticulo(det));
+      this.ponerArticulo(r, this.opcionDeArticulo(det, d.codigoMoneda));
       this.campo(r, 'cantidad').value = String(det.cantidad);
       this.campo(r, 'porcentajeBonificacion').value = String(det.porcentajeBonificacion);
       this.campo(r, 'descripcion').value = det.descripcion ?? '';
@@ -203,9 +203,12 @@ export class Formulario {
     campoDe('cantidad', 'Cantidad', crear(doc, 'input', undefined, { type: 'number', step: 'any', min: '0' }));
     campoDe('porcentajeBonificacion', 'Bonificación %', crear(doc, 'input', undefined, { type: 'number', step: 'any', min: '0', max: '100' }));
     campoDe('descripcion', 'Descripción (opcional, hasta 255 caracteres)', crear(doc, 'input', undefined, { type: 'text', maxlength: '255' }));
-    const precio = crear(doc, 'p', 'Precio de catálogo: ');
+    const precio = crear(doc, 'p', 'Precio de catálogo: ', { class: 'dato-renglon' });
     precio.appendChild(crear(doc, 'output', undefined, { name: 'precio' }));
     r.appendChild(precio);
+    const subtotal = crear(doc, 'p', 'Subtotal (sin IVA): ', { class: 'dato-renglon' });
+    subtotal.appendChild(crear(doc, 'output', undefined, { name: 'subtotal' }));
+    r.appendChild(subtotal);
     r.appendChild(crear(doc, 'button', undefined, { type: 'button', 'data-quitar': '' }));
     this.contenedor.appendChild(r);
     this.renumerar();
@@ -278,12 +281,16 @@ export class Formulario {
     this.actualizarEstimacion();
   }
 
-  /** Opción del renglón del detalle: la del catálogo cargado o, si no figura, código, descripción y precio del detalle. */
-  private opcionDeArticulo(det: FacturaDetalleDTO): OpcionDTO {
+  /**
+   * Opción del renglón del detalle: la del catálogo cargado (precio de lista, en pesos) o, si no figura, código,
+   * descripción y precio del detalle. Ese precio ya está en la moneda de la factura: se marca con su código
+   * para que la estimación no lo convierta una segunda vez.
+   */
+  private opcionDeArticulo(det: FacturaDetalleDTO, codigoMonedaFactura: string): OpcionDTO {
     const delCatalogo = this.articulos.find((a) => a.id === det.listaPrecioArticuloId);
     if (delCatalogo) return delCatalogo;
     const etiqueta = det.descripcion ? `${det.articuloCodigo} - ${det.descripcion}` : det.articuloCodigo;
-    return { id: det.listaPrecioArticuloId, etiqueta, valor: det.precioUnitario, codigoMoneda: null };
+    return { id: det.listaPrecioArticuloId, etiqueta, valor: det.precioUnitario, codigoMoneda: codigoMonedaFactura };
   }
 
   private destino(clave: string): HTMLElement | null {
@@ -303,8 +310,21 @@ export class Formulario {
     this.guardar.textContent = modo.tipo === 'edicion' ? 'Guardar cambios' : 'Guardar borrador';
   }
 
-  /** Precio de catálogo por renglón y total neto estimado sin IVA (informativo). */
+  /** Pesos que vale una unidad de la moneda (la cotización viaja en el catálogo de monedas); 1 si no se conoce. */
+  private cotizacionDe(codigoMoneda: string | null): number {
+    const moneda = codigoMoneda === null ? undefined : this.monedas.find((m) => m.codigoMoneda === codigoMoneda);
+    return moneda?.valor ?? 1;
+  }
+
+  /**
+   * Precio de catálogo por renglón y total neto estimado sin IVA (informativo). El precio de lista está en pesos:
+   * con otra moneda elegida se divide por su cotización, como hace el servidor al guardar.
+   */
   private actualizarEstimacion(): void {
+    const monedaElegida = this.monedas.find((m) => String(m.id) === this.tipoMoneda.value);
+    const cotizacionDestino = this.cotizacionDe(monedaElegida?.codigoMoneda ?? null);
+    const formato = (importe: number): string =>
+      monedaElegida?.codigoMoneda ? formatearImporte(importe, monedaElegida.codigoMoneda) : formatearDecimal(importe);
     const estimables: RenglonEstimable[] = this.renglones().map((r) => {
       const salida = r.querySelector('output[name="precio"]') as HTMLElement;
       const opcionElegida = this.elegidas.get(r);
@@ -313,15 +333,19 @@ export class Formulario {
       const bonifTexto = this.campo(r, 'porcentajeBonificacion').value.trim();
       const bonificacion = bonifTexto !== '' && Number.isFinite(Number(bonifTexto)) ? Number(bonifTexto) : 0;
       const completo = opcionElegida !== undefined && opcionElegida.valor !== null && Number.isFinite(cantidad) && cantidad > 0;
-      salida.textContent = completo ? formatearDecimal(opcionElegida.valor as number) : '';
+      const precio = completo
+        ? precioEnMoneda((opcionElegida.valor as number) * this.cotizacionDe(opcionElegida.codigoMoneda), cotizacionDestino)
+        : null;
+      salida.textContent = precio !== null ? formatearDecimal(precio) : '';
+      const salidaSubtotal = r.querySelector('output[name="subtotal"]') as HTMLElement;
+      salidaSubtotal.textContent = precio !== null ? formato(netoEstimado([{ precio, cantidad, bonificacion }])) : '';
       return {
-        precio: completo ? (opcionElegida.valor as number) : null,
+        precio,
         cantidad: completo ? cantidad : null,
         bonificacion,
       };
     });
     const neto = netoEstimado(estimables);
-    const moneda = this.monedas.find((m) => String(m.id) === this.tipoMoneda.value);
-    this.total.textContent = moneda?.codigoMoneda ? formatearImporte(neto, moneda.codigoMoneda) : formatearDecimal(neto);
+    this.total.textContent = formato(neto);
   }
 }

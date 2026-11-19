@@ -197,3 +197,21 @@ test('Editar y guardar sin tocar el cliente ni los articulos: el PUT conserva su
   assert.equal(req.clienteId, 2);
   assert.deepEqual(req.detalles.map((d) => d.listaPrecioArticuloId), [1, 3]);
 });
+
+// ---- Conversion de pesos a dolares: la edicion no convierte dos veces ----
+
+const renglonEnDolares = { id: 11, listaPrecioArticuloId: 3, articuloCodigo: 'HDMI', descripcion: null, cantidad: 1, precioUnitario: 5.16, porcentajeBonificacion: 0, importeNeto: 5.16, importeIva: 1.08, importeSubtotal: 6.24 };
+
+test('Editar un borrador en dolares: el precio del catalogo se muestra convertido una sola vez', async () => {
+  const t = await arrancar({ obtenerFactura: detalle(5, { tipoMonedaId: 2, codigoMoneda: 'DOL', detalles: [renglonEnDolares] }) });
+  await t.editar(5);
+  assert.equal(t.filas()[0].querySelector('output[name="precio"]').textContent, '5,16');
+});
+
+test('Editar un borrador en dolares con un articulo fuera del catalogo: usa el precio guardado sin convertirlo de nuevo', async () => {
+  const cat = catalogosEjemplo();
+  cat.listaPrecioArticulos = [];
+  const t = await arrancar({ obtenerCatalogos: cat, obtenerFactura: detalle(5, { tipoMonedaId: 2, codigoMoneda: 'DOL', detalles: [renglonEnDolares] }) });
+  await t.editar(5);
+  assert.equal(t.filas()[0].querySelector('output[name="precio"]').textContent, '5,16');
+});

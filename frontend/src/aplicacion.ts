@@ -38,7 +38,7 @@ export function iniciarAplicacion(entorno: Entorno): Aplicacion {
     cliente: (disparador) => buscarClientes(disparador, 'Buscar cliente'),
     articulo: (disparador, renglon) =>
       explorador.elegir(
-        { titulo: `Buscar artículo de lista de precios (renglón ${renglon})`, buscar: (q) => servicio.buscarListaPrecioArticulos(q), conPrecio: true },
+        { titulo: `Buscar artículo de lista de precios (renglón ${renglon})`, buscar: (q, listaId) => servicio.buscarListaPrecioArticulos(q, listaId), listas: () => servicio.obtenerListasPrecio(), conPrecio: true },
         disparador,
       ),
   });

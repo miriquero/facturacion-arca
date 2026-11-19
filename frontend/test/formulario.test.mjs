@@ -464,3 +464,60 @@ test('Tras un error del servidor los botones de explorador tambien se liberan', 
   assert.equal(botonArticulo(t, 0).matches(':disabled'), false);
   assert.equal(t.$('elegir-cliente').matches(':disabled'), false);
 });
+
+// ---- Conversion de pesos a dolares (1 dolar = 1.550 pesos) ----
+
+test('Elegir dolares convierte el precio de catalogo y el total estimado', async () => {
+  const t = await arrancar();
+  t.poner(t.$('tipo-moneda'), '2');
+  await t.llenarRenglon(0, { articulo: '3', cantidad: '1' });
+  assert.equal(t.filas()[0].querySelector('output[name="precio"]').textContent, '5,16');
+  assert.match(t.$('total-estimado').textContent, /^US\$\s5,16$/);
+});
+
+test('La cantidad multiplica el precio ya convertido y redondeado', async () => {
+  const t = await arrancar();
+  t.poner(t.$('tipo-moneda'), '2');
+  await t.llenarRenglon(0, { articulo: '3', cantidad: '3' });
+  assert.match(t.$('total-estimado').textContent, /^US\$\s15,48$/);
+});
+
+test('Cambiar la moneda recalcula: de dolares a pesos vuelve al precio de lista', async () => {
+  const t = await arrancar();
+  t.poner(t.$('tipo-moneda'), '2');
+  await t.llenarRenglon(0, { articulo: '3', cantidad: '1' });
+  t.poner(t.$('tipo-moneda'), '1');
+  assert.equal(t.filas()[0].querySelector('output[name="precio"]').textContent, '8.000,00');
+  assert.match(t.$('total-estimado').textContent, /^\$\s8\.000,00$/);
+  t.poner(t.$('tipo-moneda'), '2');
+  assert.equal(t.filas()[0].querySelector('output[name="precio"]').textContent, '5,16');
+});
+
+// ---- Subtotal por renglon (observaciones del TP) ----
+
+test('Cada renglon muestra su subtotal sin IVA, con la bonificacion aplicada', async () => {
+  const t = await arrancar();
+  t.poner(t.$('tipo-moneda'), '1');
+  await t.llenarRenglon(0, { articulo: '1', cantidad: '2', bonificacion: '10' });
+  t.$('agregar-renglon').click();
+  await t.llenarRenglon(1, { articulo: '3', cantidad: '1' });
+  const subtotal = (i) => t.filas()[i].querySelector('output[name="subtotal"]').textContent;
+  assert.match(subtotal(0), /^\$\s5\.400,00$/);
+  assert.match(subtotal(1), /^\$\s8\.000,00$/);
+  assert.match(t.$('total-estimado').textContent, /^\$\s13\.400,00$/);
+});
+
+test('El subtotal del renglon acompana la moneda elegida: en dolares usa el precio convertido', async () => {
+  const t = await arrancar();
+  t.poner(t.$('tipo-moneda'), '2');
+  await t.llenarRenglon(0, { articulo: '3', cantidad: '3' });
+  assert.match(t.filas()[0].querySelector('output[name="subtotal"]').textContent, /^US\$\s15,48$/);
+});
+
+test('Un renglon incompleto no muestra subtotal', async () => {
+  const t = await arrancar();
+  t.poner(t.$('tipo-moneda'), '1');
+  assert.equal(t.filas()[0].querySelector('output[name="subtotal"]').textContent, '');
+  await t.llenarRenglon(0, { articulo: '1', cantidad: '' });
+  assert.equal(t.filas()[0].querySelector('output[name="subtotal"]').textContent, '');
+});

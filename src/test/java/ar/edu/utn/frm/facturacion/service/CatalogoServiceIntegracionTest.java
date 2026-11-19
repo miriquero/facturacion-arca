@@ -19,10 +19,13 @@ import ar.edu.utn.frm.facturacion.model.PersistenciaBase;
 import ar.edu.utn.frm.facturacion.model.PuntoVenta;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import ar.edu.utn.frm.facturacion.config.FacturacionProperties;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Import;
 
 @Import(CatalogoService.class)
+@EnableConfigurationProperties(FacturacionProperties.class)
 class CatalogoServiceIntegracionTest extends PersistenciaBase {
 
     @Autowired
@@ -75,14 +78,14 @@ class CatalogoServiceIntegracionTest extends PersistenciaBase {
     }
 
     @Test
-    void pesosYDolaresExponenSuCodigoYNoTienenValor() {
+    void pesosYDolaresExponenSuCodigoYSuCotizacionEnPesos() {
         var pesos = em.persist(tipoMoneda("PES", "Pesos", "$"));
         var dolares = em.persist(tipoMoneda("DOL", "Dólar estadounidense", "US$"));
         sincronizar();
 
         assertThat(servicio.tiposMoneda()).containsExactly(
-                new OpcionDTO(pesos.getId(), "Pesos", null, "PES"),
-                new OpcionDTO(dolares.getId(), "Dólar estadounidense", null, "DOL"));
+                new OpcionDTO(pesos.getId(), "Pesos", 1.0, "PES"),
+                new OpcionDTO(dolares.getId(), "Dólar estadounidense", 1550.0, "DOL"));
     }
 
     @Test
@@ -93,7 +96,7 @@ class CatalogoServiceIntegracionTest extends PersistenciaBase {
         sincronizar();
 
         assertThat(servicio.listaPrecioArticulos())
-                .containsExactly(new OpcionDTO(oferta.getId(), "ART-001 - Martillo (GENERAL)", 3000.00, null));
+                .containsExactly(new OpcionDTO(oferta.getId(), "ART-001 - Martillo (GENERAL)", 3000.00, "PES"));
     }
 
     @Test
@@ -106,8 +109,8 @@ class CatalogoServiceIntegracionTest extends PersistenciaBase {
         sincronizar();
 
         assertThat(servicio.listaPrecioArticulos()).containsExactly(
-                new OpcionDTO(enGeneral.getId(), "ART-001 - Martillo (GENERAL)", 3000.00, null),
-                new OpcionDTO(enMayorista.getId(), "ART-001 - Martillo (MAYORISTA)", 2500.00, null));
+                new OpcionDTO(enGeneral.getId(), "ART-001 - Martillo (GENERAL)", 3000.00, "PES"),
+                new OpcionDTO(enMayorista.getId(), "ART-001 - Martillo (MAYORISTA)", 2500.00, "PES"));
     }
 
     @Test

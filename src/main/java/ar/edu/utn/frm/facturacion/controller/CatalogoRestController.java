@@ -40,7 +40,15 @@ public class CatalogoRestController {
     }
 
     @GetMapping("/lista-precio-articulos")
-    public List<OpcionDTO> listaPrecioArticulos(@RequestParam(required = false) String q) {
-        return catalogoService.listaPrecioArticulos(q);
+    public List<OpcionDTO> listaPrecioArticulos(@RequestParam(required = false) String q,
+            @RequestParam(required = false) Long listaId) {
+        return listaId == null ? catalogoService.listaPrecioArticulos(q)
+                : catalogoService.listaPrecioArticulos(q, listaId);
+    }
+
+    /** Listas de precios disponibles para elegir al buscar artículos. */
+    @GetMapping("/listas-precio")
+    public List<OpcionDTO> listasPrecio() {
+        return catalogoService.listasPrecio();
     }
 }

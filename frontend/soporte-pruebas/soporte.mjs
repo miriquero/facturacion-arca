@@ -70,7 +70,7 @@ export function montarPagina(url = 'http://localhost:5173/') {
   return { dom, documento: dom.window.document, ventana: dom.window };
 }
 
-const METODOS = ['obtenerFacturas', 'obtenerFactura', 'obtenerCatalogos', 'buscarClientes', 'buscarListaPrecioArticulos', 'crearFactura', 'actualizarFactura', 'cambiarEstado', 'eliminarFactura'];
+const METODOS = ['obtenerFacturas', 'obtenerFactura', 'obtenerCatalogos', 'buscarClientes', 'buscarListaPrecioArticulos', 'obtenerListasPrecio', 'crearFactura', 'actualizarFactura', 'cambiarEstado', 'eliminarFactura'];
 
 /**
  * Doble de ApiFacturas. Cada llamada se registra en `llamadas`; si `auto` trae el metodo, responde al instante
@@ -116,8 +116,8 @@ export const catalogosEjemplo = () => ({
   ],
   condicionesIva: [{ id: 2, etiqueta: 'Responsable Inscripto', valor: null, codigoMoneda: null }],
   tiposMoneda: [
-    { id: 1, etiqueta: 'Pesos', valor: null, codigoMoneda: 'PES' },
-    { id: 2, etiqueta: 'Dólares', valor: null, codigoMoneda: 'DOL' },
+    { id: 1, etiqueta: 'Pesos', valor: 1, codigoMoneda: 'PES' },
+    { id: 2, etiqueta: 'Dólares', valor: 1550, codigoMoneda: 'DOL' },
   ],
   listaPrecioArticulos: [
     { id: 1, etiqueta: 'Martillo', valor: 3000, codigoMoneda: 'PES' },
