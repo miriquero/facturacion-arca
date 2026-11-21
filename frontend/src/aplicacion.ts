@@ -47,7 +47,9 @@ export function iniciarAplicacion(entorno: Entorno): Aplicacion {
 
   async function cargarCatalogos(): Promise<void> {
     try {
-      formulario.cargarCatalogos(await servicio.obtenerCatalogos());
+      const catalogos = await servicio.obtenerCatalogos();
+      formulario.cargarCatalogos(catalogos);
+      pantallaListado.cargarSucursales(catalogos.puntosVenta);
     } catch (e) {
       region.error(mensajeDe(e));
     }

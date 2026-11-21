@@ -51,7 +51,8 @@
       <dd>Reemplaza la cabecera y todos los renglones de un borrador. Devuelve <code>200 OK</code>.</dd>
       <dt><code>PATCH /facturas/{id}/estado</code></dt>
       <dd>Emite un borrador o anula una factura emitida. Devuelve <code>200 OK</code>.
-        La emisión asigna el número y un CAE simulado.</dd>
+        En homologación, la emisión de Factura C en pesos o dólares guarda el número, el CAE y el vencimiento autorizados por
+        ARCA. La anulación es local y conserva la autorización del comprobante.</dd>
       <dt><code>DELETE /facturas/{id}</code></dt>
       <dd>Elimina un borrador. Devuelve <code>204 No Content</code>.</dd>
     </dl>
@@ -59,7 +60,7 @@
     <h3>Filtros y paginación</h3>
     <p>El listado y el reporte aceptan <code>fechaDesde</code> y <code>fechaHasta</code> con formato
       <code>AAAA-MM-DD</code>, <code>estado</code> (<code>BORRADOR</code>, <code>EMITIDA</code> o
-      <code>ANULADA</code>), <code>montoMinimo</code>, <code>numero</code>, <code>clienteId</code>
+      <code>ANULADA</code>), <code>montoMinimo</code>, <code>numero</code>, <code>clienteId</code>, <code>puntoVentaId</code>
       e <code>informada</code> (<code>true</code> o <code>false</code>).</p>
     <p>El listado también acepta <code>pagina</code> (empieza en 0) y <code>tamanio</code>
       (10 por defecto, máximo 100).</p>

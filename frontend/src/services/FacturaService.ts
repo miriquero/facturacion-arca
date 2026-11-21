@@ -31,6 +31,7 @@ export function consultaFiltros(filtros: FacturaFiltrosDTO): URLSearchParams {
   if (filtros.montoMinimo !== undefined) params.set('montoMinimo', String(filtros.montoMinimo));
   if (filtros.numero !== undefined) params.set('numero', String(filtros.numero));
   if (filtros.clienteId !== undefined) params.set('clienteId', String(filtros.clienteId));
+  if (filtros.puntoVentaId !== undefined) params.set('puntoVentaId', String(filtros.puntoVentaId));
   if (filtros.informada) params.set('informada', filtros.informada);
   return params;
 }

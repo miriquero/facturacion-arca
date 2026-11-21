@@ -1,9 +1,6 @@
 package ar.edu.utn.frm.facturacion.config;
 
 import ar.edu.utn.frm.facturacion.service.CalculadoraImportes;
-import ar.edu.utn.frm.facturacion.service.GeneradorCae;
-import ar.edu.utn.frm.facturacion.service.GeneradorCaeAleatorio;
-import java.security.SecureRandom;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,9 +13,4 @@ public class NegocioConfig {
         return new CalculadoraImportes();
     }
 
-    /** CAE ficticio con una fuente aleatoria real; las pruebas lo reemplazan por uno fijo. */
-    @Bean
-    public GeneradorCae generadorCae() {
-        return new GeneradorCaeAleatorio(new SecureRandom());
-    }
 }

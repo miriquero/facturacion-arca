@@ -51,11 +51,12 @@ public class FacturaRestController {
             @RequestParam(required = false) Double montoMinimo,
             @RequestParam(required = false) Long numero,
             @RequestParam(required = false) Long clienteId,
+            @RequestParam(required = false) Long puntoVentaId,
             @RequestParam(required = false) String informada,
             @RequestParam(required = false) Integer pagina,
             @RequestParam(required = false) Integer tamanio) {
         return ResponseEntity.ok(facturaService.listar(new FacturaFiltrosDTO(fechaDesde, fechaHasta, estado,
-                montoMinimo, numero, clienteId, informada), pagina, tamanio));
+                montoMinimo, numero, clienteId, informada, puntoVentaId), pagina, tamanio));
     }
 
     @GetMapping("/{id}")
@@ -90,9 +91,10 @@ public class FacturaRestController {
             @RequestParam(required = false) Double montoMinimo,
             @RequestParam(required = false) Long numero,
             @RequestParam(required = false) Long clienteId,
+            @RequestParam(required = false) Long puntoVentaId,
             @RequestParam(required = false) String informada) {
         ArchivoReporte archivo = facturaService.generarReporte(new FacturaFiltrosDTO(fechaDesde, fechaHasta, estado,
-                montoMinimo, numero, clienteId, informada), formato);
+                montoMinimo, numero, clienteId, informada, puntoVentaId), formato);
         return ResponseEntity.ok()
                 .contentType(archivo.tipo())
                 .header(HttpHeaders.CONTENT_DISPOSITION,

@@ -63,6 +63,23 @@ class FacturaApiIntegracionTest extends IntegracionApiBase {
     }
 
     @Test
+    void sucursalFiltraElListadoElConteoYElReporte() throws Exception {
+        var facturas = tresFechas();
+        var punto = DatosDePrueba.puntoVenta(2);
+        punto.setDescripcion("Sucursal Norte");
+        var sucursal = puntoVentaRepositorio.save(punto);
+        facturas[0].setPuntoVenta(sucursal);
+        facturaRepositorio.save(facturas[0]);
+
+        String id = sucursal.getId().toString();
+        listar("puntoVentaId", id, "tamanio", "1").andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElementos").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(facturas[0].getId()));
+        assertThat(texto(reporte("formato", "txt", "puntoVentaId", id)))
+                .contains("Sucursal Norte").doesNotContain("Casa Central");
+    }
+
+    @Test
     void rangoConLimitesExactos() throws Exception {
         tresFechas();
 

@@ -8,7 +8,12 @@ import java.time.LocalDate;
  * {@code true} y {@code false}.
  */
 public record FacturaFiltrosDTO(LocalDate fechaDesde, LocalDate fechaHasta, String estado, Double montoMinimo,
-                                Long numero, Long clienteId, String informada) {
+                                Long numero, Long clienteId, String informada, Long puntoVentaId) {
+
+    public FacturaFiltrosDTO(LocalDate fechaDesde, LocalDate fechaHasta, String estado, Double montoMinimo,
+            Long numero, Long clienteId, String informada) {
+        this(fechaDesde, fechaHasta, estado, montoMinimo, numero, clienteId, informada, null);
+    }
 
     /** Constructor de las etapas 2 y 3 (sin los filtros nuevos). */
     public FacturaFiltrosDTO(LocalDate fechaDesde, LocalDate fechaHasta, String estado, Double montoMinimo) {

@@ -44,3 +44,22 @@ spring:
   h2:
     console:
       enabled: false
+---
+spring:
+  config:
+    activate:
+      on-profile: homologacion
+  datasource:
+    url: ${ARCA_BASE_DATOS:jdbc:h2:file:./.arca-homologacion}
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: false
+arca:
+  cuit: ${ARCA_CUIT}
+  punto-venta: ${ARCA_PUNTO_VENTA}
+  puntos-adicionales: ${ARCA_PUNTOS_ADICIONALES:}
+  clave-privada: ${ARCA_CLAVE_PRIVADA}
+  certificado: ${ARCA_CERTIFICADO}

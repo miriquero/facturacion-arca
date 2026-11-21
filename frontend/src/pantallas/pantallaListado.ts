@@ -1,7 +1,7 @@
 import { mensajeDe, type ApiFacturas } from '../contexto.js';
 import type { FacturaFiltrosDTO, FacturaReporteDTO, OpcionDTO, PaginaDTO, SolicitudPagina } from '../models/factura.dto.js';
 import type { Ruta } from '../navegacion/rutas.js';
-import { limpiarInvalido, marcarInvalido } from '../ui/dom.js';
+import { crear, limpiarInvalido, marcarInvalido } from '../ui/dom.js';
 import { Listado, textoCantidad } from '../ui/listado.js';
 import { Paginacion, textoPagina } from '../ui/paginacion.js';
 import type { RegionEstado } from '../ui/regionEstado.js';
@@ -83,6 +83,7 @@ export class PantallaListado implements Pantalla {
         numero: campoNumero.value,
         informada: $<HTMLSelectElement>('filtro-informada').value,
         clienteId: salidaCliente.getAttribute('data-id') ?? '',
+        puntoVentaId: $<HTMLSelectElement>('filtro-sucursal').value,
       });
       limpiarInvalido(campoMonto);
       limpiarInvalido(campoNumero);
@@ -111,6 +112,14 @@ export class PantallaListado implements Pantalla {
 
   tituloDocumento(_ruta: Ruta): string {
     return 'Facturas';
+  }
+
+  cargarSucursales(puntos: readonly OpcionDTO[]): void {
+    const selector = this.doc.getElementById('filtro-sucursal') as HTMLSelectElement;
+    const seleccion = selector.value;
+    const opciones = puntos.map((punto) => crear(this.doc, 'option', punto.etiqueta, { value: String(punto.id) }));
+    selector.replaceChildren(crear(this.doc, 'option', 'Todas', { value: '' }), ...opciones);
+    if (puntos.some((punto) => String(punto.id) === seleccion)) selector.value = seleccion;
   }
 
   /** La primera vez, la página 0 sin filtros; después, los mismos filtros y la misma página para reflejar cambios ajenos. */

@@ -46,6 +46,10 @@ public class ReporteFacturasService {
         return comprobante.generar(factura);
     }
 
+    public byte[] generarComprobanteHomologacion(FacturaDetalladaDTO factura) {
+        return comprobante.generar(factura, true);
+    }
+
     public byte[] generarPdf(List<FacturaReporteDTO> filas) {
         return pdf.generar(filas);
     }

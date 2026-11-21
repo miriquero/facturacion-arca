@@ -116,6 +116,9 @@ public class FacturaReporteRepositoryImpl implements FacturaReporteRepository {
         if (filtro.clienteId() != null) {
             condiciones.add("c.id = :clienteId");
         }
+        if (filtro.puntoVentaId() != null) {
+            condiciones.add("f.puntoVenta.id = :puntoVentaId");
+        }
         if (filtro.informada() != null) {
             condiciones.add(filtro.informada() ? "f.cae IS NOT NULL" : "f.cae IS NULL");
         }
@@ -141,6 +144,9 @@ public class FacturaReporteRepositoryImpl implements FacturaReporteRepository {
         }
         if (filtro.clienteId() != null) {
             consulta.setParameter("clienteId", filtro.clienteId());
+        }
+        if (filtro.puntoVentaId() != null) {
+            consulta.setParameter("puntoVentaId", filtro.puntoVentaId());
         }
     }
 }

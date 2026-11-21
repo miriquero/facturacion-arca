@@ -28,14 +28,17 @@ import ar.edu.utn.frm.facturacion.repository.RubroRepository;
 import ar.edu.utn.frm.facturacion.repository.TipoMonedaRepository;
 import ar.edu.utn.frm.facturacion.repository.UsuarioRepository;
 import ar.edu.utn.frm.facturacion.service.FacturaService;
+import ar.edu.utn.frm.facturacion.service.GeneradorCae;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,13 +67,15 @@ public class DataLoader implements CommandLineRunner {
     private final FacturaVentaRepository facturaVentaRepository;
     private final FacturaService facturaService;
     private final Clock reloj;
+    private final Environment entorno;
+    private final Optional<GeneradorCae> generadorDePrueba;
 
     public DataLoader(UsuarioRepository usuarioRepository, PuntoVentaRepository puntoVentaRepository,
             CondicionIvaRepository condicionIvaRepository, TipoMonedaRepository tipoMonedaRepository,
             RubroRepository rubroRepository, MarcaRepository marcaRepository, ArticuloRepository articuloRepository,
             ListaPrecioRepository listaPrecioRepository, ListaPrecioArticuloRepository listaPrecioArticuloRepository,
             ClienteRepository clienteRepository, FacturaVentaRepository facturaVentaRepository,
-            FacturaService facturaService, Clock reloj) {
+            FacturaService facturaService, Clock reloj, Environment entorno, Optional<GeneradorCae> generadorDePrueba) {
         this.usuarioRepository = usuarioRepository;
         this.puntoVentaRepository = puntoVentaRepository;
         this.condicionIvaRepository = condicionIvaRepository;
@@ -84,6 +89,8 @@ public class DataLoader implements CommandLineRunner {
         this.facturaVentaRepository = facturaVentaRepository;
         this.facturaService = facturaService;
         this.reloj = reloj;
+        this.entorno = entorno;
+        this.generadorDePrueba = generadorDePrueba;
     }
 
     @Override
@@ -101,7 +108,12 @@ public class DataLoader implements CommandLineRunner {
         try {
             Base base = cargarCatalogos();
             Cliente[] clientes = cargarClientes();
-            cargarFacturas(base, clientes[0], clientes[1]);
+            if (!entorno.matchesProfiles("homologacion") && generadorDePrueba.isPresent()) {
+                cargarFacturas(base, clientes[0], clientes[1]);
+            } else {
+                crear(base, base.pv1(), null, base.pesos(), 0, renglon(base.martillo(), "Martillo", "1"));
+                crear(base, base.pv1(), null, base.pesos(), 0, renglon(base.cable(), "Cable HDMI", "2"));
+            }
             // Flush con el usuario aún en el contexto: los UPDATE pendientes (p. ej. los que completan la
             // modificación) se emiten acá y no al confirmar la transacción, cuando el finally ya lo limpió.
             facturaVentaRepository.flush();
@@ -119,8 +131,10 @@ public class DataLoader implements CommandLineRunner {
     }
 
     private Base cargarCatalogos() {
-        PuntoVenta pv1 = puntoVentaRepository.save(puntoVenta(1, "Casa Central"));
-        PuntoVenta pv2 = puntoVentaRepository.save(puntoVenta(2, "Sucursal Norte"));
+        int numero = entorno.matchesProfiles("homologacion")
+                ? entorno.getRequiredProperty("arca.punto-venta", Integer.class) : 1;
+        PuntoVenta pv1 = puntoVentaRepository.save(puntoVenta(numero, "Casa Central"));
+        PuntoVenta pv2 = puntoVentaRepository.save(puntoVenta(numero == 2 ? 1 : 2, "Sucursal Norte"));
         CondicionIva consumidorFinal = condicionIvaRepository.save(condicionIva(5, "Consumidor Final"));
         condicionIvaRepository.save(condicionIva(1, "Responsable Inscripto"));
         TipoMoneda pesos = tipoMonedaRepository.save(moneda("PES", "Peso argentino", "$"));

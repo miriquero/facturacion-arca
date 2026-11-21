@@ -17,7 +17,12 @@ import java.util.Locale;
  * @param informada {@code true}: facturas con CAE (informadas a ARCA); {@code false}: sin CAE
  */
 public record FiltroFacturas(LocalDate desde, LocalDate hasta, EstadoFactura estado, Double montoMinimo,
-                             Long numero, Long clienteId, Boolean informada) {
+                             Long numero, Long clienteId, Boolean informada, Long puntoVentaId) {
+
+    public FiltroFacturas(LocalDate desde, LocalDate hasta, EstadoFactura estado, Double montoMinimo,
+            Long numero, Long clienteId, Boolean informada) {
+        this(desde, hasta, estado, montoMinimo, numero, clienteId, informada, null);
+    }
 
     public static final FiltroFacturas SIN_FILTROS = new FiltroFacturas(null, null, null, null);
 
@@ -36,8 +41,12 @@ public record FiltroFacturas(LocalDate desde, LocalDate hasta, EstadoFactura est
         validarFechas(crudos.fechaDesde(), crudos.fechaHasta());
         validarMonto(crudos.montoMinimo());
         validarNumero(crudos.numero());
+        if (crudos.puntoVentaId() != null && crudos.puntoVentaId() < 1) {
+            throw new ParametroInvalidoException("puntoVentaId debe ser mayor o igual que 1.");
+        }
         return new FiltroFacturas(crudos.fechaDesde(), crudos.fechaHasta(), normalizarEstado(crudos.estado()),
-                crudos.montoMinimo(), crudos.numero(), crudos.clienteId(), normalizarInformada(crudos.informada()));
+                crudos.montoMinimo(), crudos.numero(), crudos.clienteId(), normalizarInformada(crudos.informada()),
+                crudos.puntoVentaId());
     }
 
     private static EstadoFactura normalizarEstado(String crudo) {

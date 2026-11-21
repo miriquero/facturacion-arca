@@ -1,0 +1,8 @@
+{
+  "cuit": "TU_CUIT_SIN_GUIONES",
+  "puntoVenta": "PUNTO_DE_VENTA_DE_HOMOLOGACION",
+  "puntosAdicionales": "",
+  "clavePrivada": "../carpeta-privada/arca-homologacion.key",
+  "certificado": "../carpeta-privada/facturacion.pem",
+  "javaHome": ""
+}

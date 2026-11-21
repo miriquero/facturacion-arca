@@ -1,5 +1,6 @@
 package ar.edu.utn.frm.facturacion.service;
 
+import ar.edu.utn.frm.facturacion.arca.EmisionArca;
 import ar.edu.utn.frm.facturacion.dto.FacturaDetalladaDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaDetalleDTO;
 import ar.edu.utn.frm.facturacion.dto.FacturaFiltrosDTO;
@@ -26,6 +27,7 @@ import ar.edu.utn.frm.facturacion.repository.ClienteRepository;
 import ar.edu.utn.frm.facturacion.repository.CondicionIvaRepository;
 import ar.edu.utn.frm.facturacion.repository.FacturaVentaRepository;
 import ar.edu.utn.frm.facturacion.repository.FiltroFacturas;
+import ar.edu.utn.frm.facturacion.repository.IntentoEmisionArcaRepository;
 import ar.edu.utn.frm.facturacion.repository.ListaPrecioArticuloRepository;
 import ar.edu.utn.frm.facturacion.repository.PuntoVentaRepository;
 import ar.edu.utn.frm.facturacion.repository.TipoMonedaRepository;
@@ -41,6 +43,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,14 +66,17 @@ public class FacturaService {
     private final ListaPrecioArticuloRepository listaPrecioArticuloRepository;
     private final CalculadoraImportes calculadora;
     private final FacturacionProperties propiedades;
-    private final GeneradorCae generadorCae;
+    private final Optional<GeneradorCae> generadorCae;
+    private final Optional<EmisionArca> emisionArca;
+    private final IntentoEmisionArcaRepository intentosArca;
     private final Clock reloj;
 
     public FacturaService(FacturaVentaRepository facturaRepository, ReporteFacturasService reporteService,
             ClienteRepository clienteRepository, CondicionIvaRepository condicionIvaRepository,
             PuntoVentaRepository puntoVentaRepository, TipoMonedaRepository tipoMonedaRepository,
             ListaPrecioArticuloRepository listaPrecioArticuloRepository, CalculadoraImportes calculadora,
-            FacturacionProperties propiedades, GeneradorCae generadorCae, Clock reloj) {
+            FacturacionProperties propiedades, Optional<GeneradorCae> generadorCae, Clock reloj,
+            Optional<EmisionArca> emisionArca, IntentoEmisionArcaRepository intentosArca) {
         this.facturaRepository = facturaRepository;
         this.reporteService = reporteService;
         this.clienteRepository = clienteRepository;
@@ -81,6 +87,8 @@ public class FacturaService {
         this.calculadora = calculadora;
         this.propiedades = propiedades;
         this.generadorCae = generadorCae;
+        this.emisionArca = emisionArca;
+        this.intentosArca = intentosArca;
         this.reloj = reloj;
     }
 
@@ -110,6 +118,7 @@ public class FacturaService {
     public FacturaReporteDTO actualizar(Long id, FacturaRequestDTO solicitud) {
         FacturaVenta factura = bloquear(id);
         exigirBorrador(factura, "editar");
+        exigirSinEmisionPendiente(id);
         Cabecera cabecera = resolverCabecera(solicitud);
         Renglones renglones = calcularRenglones(solicitud.detalles(), cabecera.tipoMoneda());
 
@@ -126,6 +135,7 @@ public class FacturaService {
     public void eliminar(Long id) {
         FacturaVenta factura = bloquear(id);
         exigirBorrador(factura, "eliminar");
+        exigirSinEmisionPendiente(id);
         facturaRepository.delete(factura);
     }
 
@@ -164,9 +174,7 @@ public class FacturaService {
     }
 
     /**
-     * Emisión simulada, con la factura ya bloqueada y en BORRADOR: sin renglones no se emite (409); se bloquea la
-     * fila del punto de venta y recién entonces se consulta el máximo número, así dos emisiones del mismo punto se
-     * serializan; el CAE se genera después de numerar, de modo que una falla del generador revierte el número.
+     * Serializa las emisiones del mismo punto de venta. En homologación la numeración y el CAE vienen de ARCA.
      */
     private void emitir(FacturaVenta factura) {
         if (factura.getDetalles().isEmpty()) {
@@ -176,13 +184,24 @@ public class FacturaService {
         PuntoVenta puntoVenta = puntoVentaRepository.bloquearPorId(factura.getPuntoVenta().getId())
                 .orElseThrow(() -> new RecursoNoEncontradoException("Punto de venta",
                         factura.getPuntoVenta().getId()));
+        if (emisionArca.isPresent()) {
+            var autorizada = emisionArca.orElseThrow().emitir(factura);
+            factura.setNumero(autorizada.numero());
+            factura.setCae(autorizada.cae());
+            factura.setCaeFechaVencimiento(autorizada.vencimiento());
+            factura.setResultadoAfip(RESULTADO_APROBADO);
+            return;
+        }
+        exigirSinEmisionPendiente(factura.getId());
+        GeneradorCae simulador = generadorCae.orElseThrow(() -> new ReglaNegocioException(
+                "Para emitir, iniciá el backend con el perfil de homologación configurado."));
         factura.setNumero(facturaRepository.maximoNumero(puntoVenta) + 1);
-        factura.setCae(generadorCae.generar());
+        factura.setCae(simulador.generar());
         factura.setCaeFechaVencimiento(LocalDate.now(reloj).plusDays(VENCIMIENTO_CAE_DIAS));
         factura.setResultadoAfip(RESULTADO_APROBADO);
     }
 
-    /** Anulación: se conserva todo el comprobante; se agrega la fecha de anulación y la baja lógica. */
+    /** Anulación local: se conserva el comprobante y su autorización en ARCA. */
     private void anular(FacturaVenta factura) {
         factura.setFechaAnulacion(LocalDate.now(reloj));
         factura.darDeBaja();
@@ -192,6 +211,12 @@ public class FacturaService {
     private FacturaVenta bloquear(Long id) {
         return facturaRepository.buscarParaActualizar(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Factura", id));
+    }
+
+    private void exigirSinEmisionPendiente(Long id) {
+        if (intentosArca.existsById(id)) {
+            throw new ReglaNegocioException("Hay una emisión pendiente de confirmar en ARCA. Pulsá Emitir para consultarla.");
+        }
     }
 
     private static void exigirBorrador(FacturaVenta factura, String operacion) {
@@ -234,8 +259,11 @@ public class FacturaService {
                             pedido.listaPrecioArticuloId()));
             Articulo articulo = oferta.getArticulo();
             BigDecimal precio = precioEn(moneda, oferta.getPrecioVenta());
-            BigDecimal alicuota = articulo.getAlicuotaIva() == null ? propiedades.ivaPorDefecto()
-                    : decimalDe(articulo.getAlicuotaIva(), "alicuotaIva");
+            BigDecimal alicuota = BigDecimal.ZERO;
+            if (emisionArca.isEmpty()) {
+                alicuota = articulo.getAlicuotaIva() == null ? propiedades.ivaPorDefecto()
+                        : decimalDe(articulo.getAlicuotaIva(), "alicuotaIva");
+            }
             BigDecimal bonificacion = pedido.porcentajeBonificacion() == null ? BigDecimal.ZERO
                     : pedido.porcentajeBonificacion();
             ImportesRenglon importes = calculadora.calcularRenglon(pedido.cantidad(), precio, bonificacion, alicuota);
@@ -385,7 +413,9 @@ public class FacturaService {
             throw new ReglaNegocioException("La factura " + id + " está en BORRADOR: no fue informada a ARCA; "
                     + "emitila para imprimirla");
         }
-        byte[] contenido = reporteService.generarComprobante(detalle);
+        byte[] contenido = intentosArca.existsById(id)
+                ? reporteService.generarComprobanteHomologacion(detalle)
+                : reporteService.generarComprobante(detalle);
         String nombre = String.format("factura-%04d-%08d.pdf", detalle.puntoVentaNumero(), detalle.numero());
         return new ArchivoReporte(nombre, MediaType.APPLICATION_PDF, contenido);
     }

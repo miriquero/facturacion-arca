@@ -87,6 +87,7 @@ export interface FacturaFiltrosDTO {
   numero?: number;
   clienteId?: number;
   informada?: 'true' | 'false';
+  puntoVentaId?: number;
 }
 
 /** Sobre paginado del listado (GET /api/facturas). */

@@ -1,5 +1,6 @@
 package ar.edu.utn.frm.facturacion;
 
+import ar.edu.utn.frm.facturacion.config.ConfiguracionArcaLocal;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -7,6 +8,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class FacturacionApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(FacturacionApplication.class, args);
+        var aplicacion = new SpringApplication(FacturacionApplication.class);
+        aplicacion.setDefaultProperties(ConfiguracionArcaLocal.cargar());
+        aplicacion.run(args);
     }
 }

@@ -28,6 +28,7 @@ export interface FiltrosTexto {
   numero?: string;
   informada?: string;
   clienteId?: string;
+  puntoVentaId?: string;
 }
 
 const MAX_DESCRIPCION = 255;
@@ -113,6 +114,8 @@ export function validarFiltros(f: FiltrosTexto): Resultado<FacturaFiltrosDTO> {
   }
   const cliente = numero(f.clienteId ?? '');
   if (cliente !== undefined && Number.isFinite(cliente)) datos.clienteId = cliente;
+  const sucursal = numero(f.puntoVentaId ?? '');
+  if (sucursal !== undefined && Number.isSafeInteger(sucursal) && sucursal > 0) datos.puntoVentaId = sucursal;
   if (f.informada === 'true' || f.informada === 'false') datos.informada = f.informada;
   return Object.keys(errores).length > 0 ? { errores } : { datos, errores };
 }

@@ -27,6 +27,23 @@ function manual(servicio, metodo) {
 const opciones = (select) => [...select.options].map((o) => ({ texto: o.text, valor: o.value }));
 const buscar = (t) => t.$('form-filtros').requestSubmit();
 
+test('Sucursal se carga desde el catalogo, viaja al buscar y se restablece al limpiar', async () => {
+  const t = arrancar();
+  await t.app.listo;
+  const selector = t.$('filtro-sucursal');
+  assert.deepEqual(opciones(selector), [
+    { texto: 'Todas', valor: '' },
+    { texto: '0001 - Casa Central', valor: '1' },
+  ]);
+  selector.value = '1';
+  buscar(t);
+  await esperarTareas();
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[1].args, [{ puntoVentaId: 1 }, P0]);
+  t.$('limpiar-filtros').click();
+  assert.equal(selector.value, '');
+  assert.deepEqual(t.servicio.de('obtenerFacturas')[2].args, [{}, P0]);
+});
+
 test('Selectores completos: etiquetas del servidor con el id del catalogo como valor', async () => {
   const t = arrancar();
   await t.app.listo;

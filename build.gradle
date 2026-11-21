@@ -30,6 +30,7 @@ dependencies {
 
     implementation 'com.github.librepdf:openpdf:2.0.3'
     implementation 'org.apache.poi:poi-ooxml:5.3.0'
+    implementation 'org.bouncycastle:bcpkix-jdk18on:1.87'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -51,6 +52,23 @@ tasks.named('test') {
 
 tasks.named('bootRun') {
     jvmArgs "-Duser.timezone=${zonaHoraria}"
+}
+
+tasks.register('probarWsaa', JavaExec) {
+    group = 'verification'
+    description = 'Solicita un ticket para wsfe en WSAA de homologación.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'ar.edu.utn.frm.facturacion.arca.PruebaWsaa'
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+}
+
+tasks.register('probarWsfe', JavaExec) {
+    group = 'verification'
+    description = 'Consulta el último comprobante C autorizado en homologación, sin emitir.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'ar.edu.utn.frm.facturacion.arca.PruebaWsaa'
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+    args 'wsfe'
 }
 
 // Evita generar facturacion-arca-1.0.0-plain.jar: build/libs/ solo contiene el JAR ejecutable.

@@ -35,6 +35,7 @@ final class ComprobantePdf {
     private static final int MARGEN = 36;
     private static final String ESTADO_ANULADA = "ANULADA";
     private static final String LEYENDA = "Comprobante simulado con fines académicos, sin validez fiscal. CAE ficticio.";
+    private static final String LEYENDA_HOMOLOGACION = "Comprobante de homologación ARCA, sin validez fiscal.";
     static final List<String> ENCABEZADOS = List.of("Código", "Descripción", "Cantidad", "Precio unit.", "Bonif. %",
             "Neto", "IVA", "Subtotal");
     private static final float[] ANCHOS_RELATIVOS = {12, 28, 9, 12, 9, 12, 10, 12};
@@ -48,8 +49,13 @@ final class ComprobantePdf {
     }
 
     byte[] generar(FacturaDetalladaDTO factura) {
+        return generar(factura, false);
+    }
+
+    byte[] generar(FacturaDetalladaDTO factura, boolean homologacion) {
         BaseFont base = fuentePdf.fuente();
-        new VerificadorGlifos(base).verificarDatos(datos(factura));
+        String textoLeyenda = homologacion ? LEYENDA_HOMOLOGACION : LEYENDA;
+        new VerificadorGlifos(base).verificarDatos(datos(factura, textoLeyenda));
         ByteArrayOutputStream salida = new ByteArrayOutputStream();
         Document documento = new Document(PageSize.A4, MARGEN, MARGEN, MARGEN, MARGEN);
         try {
@@ -58,7 +64,7 @@ final class ComprobantePdf {
             Font titulo = new Font(base, 18);
             Font texto = new Font(base, 10);
 
-            documento.add(new Paragraph("Factura", titulo));
+            documento.add(new Paragraph(homologacion ? "Factura C" : "Factura", titulo));
             documento.add(new Paragraph("Número: " + numero(factura), texto));
             documento.add(new Paragraph("Fecha de emisión: " + factura.fechaEmision().format(FORMATO_FECHA), texto));
             documento.add(new Paragraph("Punto de venta: " + factura.puntoVentaDescripcion(), texto));
@@ -93,7 +99,7 @@ final class ComprobantePdf {
                 observaciones.setSpacingBefore(10);
                 documento.add(observaciones);
             }
-            Paragraph leyenda = new Paragraph(LEYENDA, new Font(base, 8));
+            Paragraph leyenda = new Paragraph(textoLeyenda, new Font(base, 8));
             leyenda.setSpacingBefore(16);
             documento.add(leyenda);
         } catch (DocumentException e) {
@@ -169,10 +175,10 @@ final class ComprobantePdf {
     }
 
     /** Todo texto del documento con el nombre del dato que lo origina, para verificar glifos antes de escribir. */
-    private List<VerificadorGlifos.DatoImpreso> datos(FacturaDetalladaDTO factura) {
+    private List<VerificadorGlifos.DatoImpreso> datos(FacturaDetalladaDTO factura, String leyenda) {
         List<VerificadorGlifos.DatoImpreso> datos = new ArrayList<>();
         datos.add(new VerificadorGlifos.DatoImpreso("texto fijo", "Factura Número Fecha de emisión Punto de venta Generado "
-                + "(hora de Argentina) Cliente CUIT/CUIL Condición frente al IVA Moneda Renglones " + LEYENDA
+                + "(hora de Argentina) Cliente CUIT/CUIL Condición frente al IVA Moneda Renglones " + leyenda
                 + " Total neto Total IVA Total Estado CAE Vencimiento del CAE Resultado ANULADA Fecha de anulación "
                 + "Observaciones " + String.join(" ", ENCABEZADOS)));
         datos.add(new VerificadorGlifos.DatoImpreso("cliente", factura.clienteDenominacion()));

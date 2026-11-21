@@ -14,3 +14,11 @@ Thumbs.db
 
 # Registro de skills del orquestador (local, no se versiona)
 .atl/
+*.key
+*.pem
+*.pfx
+*.p12
+wsaa-wsfe-*.local
+*.mv.db
+*.trace.db
+/arca.local.json

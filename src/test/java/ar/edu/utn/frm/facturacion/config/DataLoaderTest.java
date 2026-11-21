@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  * prueba es transaccional y se revierte; la carga ya quedó confirmada al arrancar.
  */
 @SpringBootTest
+@org.springframework.test.context.ActiveProfiles("carga-prueba")
 @AutoConfigureTestDatabase
 @Transactional
 class DataLoaderTest {
